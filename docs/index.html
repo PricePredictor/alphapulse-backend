@@ -2,66 +2,107 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AlphaPulse Live Test</title>
+  <title>AlphaPulse – Live Stock Prediction Test</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 2em; background: #f4f4f4; }
-    h1 { color: #333; }
-    input { padding: 8px; width: 200px; }
-    button { padding: 8px 12px; margin-left: 10px; }
-    .output { margin-top: 20px; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
-    .error { color: red; }
+    body {
+      font-family: "Segoe UI", sans-serif;
+      background-color: #f8f9fa;
+      padding: 2em;
+      color: #222;
+    }
+    h1 {
+      color: #1a73e8;
+    }
+    label, input, button {
+      font-size: 1em;
+    }
+    input {
+      padding: 0.5em;
+      width: 200px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 0.5em 1em;
+      margin-left: 10px;
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #155ab6;
+    }
+    .output {
+      margin-top: 20px;
+      padding: 1em;
+      background: white;
+      border-left: 4px solid #1a73e8;
+      box-shadow: 0 0 10px rgba(0,0,0,0.05);
+      border-radius: 4px;
+    }
+    .error {
+      color: red;
+    }
   </style>
 </head>
 <body>
 
-  <h1>AlphaPulse Live Test</h1>
+  <h1>AlphaPulse – Live Stock Predictor</h1>
 
-  <label>Stock Symbol:
-    <input type="text" id="symbol" placeholder="e.g. AAPL">
-  </label>
-  <br><br>
+  <p>Enter a stock symbol (like <b>AAPL</b>, <b>TSLA</b>, or <b>MSFT</b>) and test the backend API live:</p>
+
+  <input type="text" id="symbol" placeholder="Enter symbol" />
   <button onclick="getLivePrice()">Get Live Price</button>
   <button onclick="getPrediction()">Get Prediction</button>
 
-  <div class="output" id="output"></div>
+  <div id="output" class="output"></div>
 
   <script>
     const baseUrl = "https://alphapulse-backend-a2fpcqaneag6bqat.centralus-01.azurewebsites.net";
 
     async function getLivePrice() {
-      const symbol = document.getElementById('symbol').value.trim();
-      if (!symbol) return showError("Please enter a symbol.");
+      const symbol = getSymbol();
+      if (!symbol) return;
       try {
         const res = await fetch(`${baseUrl}/live-price?symbol=${symbol}`);
         const data = await res.json();
-        showOutput(`Live price for <b>${data.symbol}</b>: $${data.price}`);
+        showOutput(`<b>${data.symbol}</b> Live Price: $${data.price}`);
       } catch (err) {
-        showError("Failed to fetch live price.");
+        showError("Could not fetch live price.");
       }
     }
 
     async function getPrediction() {
-      const symbol = document.getElementById('symbol').value.trim();
-      if (!symbol) return showError("Please enter a symbol.");
+      const symbol = getSymbol();
+      if (!symbol) return;
       try {
         const res = await fetch(`${baseUrl}/predict?symbol=${symbol}`);
         const data = await res.json();
-        showOutput(
-          `Prediction for <b>${data.symbol}</b>:<br>` +
-          `Current Price: $${data.current_price}<br>` +
-          `Predicted Price: <b>$${data.predicted_price}</b>`
-        );
+        showOutput(`<b>${data.symbol}</b><br>Current: $${data.current_price}<br>Predicted: <b>$${data.predicted_price}</b>`);
       } catch (err) {
-        showError("Failed to fetch prediction.");
+        showError("Could not fetch prediction.");
       }
     }
 
+    function getSymbol() {
+      const symbol = document.getElementById("symbol").value.trim();
+      if (!symbol) {
+        showError("Please enter a symbol.");
+        return null;
+      }
+      return symbol.toUpperCase();
+    }
+
     function showOutput(html) {
-      document.getElementById('output').innerHTML = html;
+      document.getElementById("output").innerHTML = html;
+      document.getElementById("output").classList.remove("error");
     }
 
     function showError(msg) {
-      document.getElementById('output').innerHTML = `<span class="error">${msg}</span>`;
+      document.getElementById("output").innerHTML = msg;
+      document.getElementById("output").classList.add("error");
     }
   </script>
 
