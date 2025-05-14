@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AlphaPulse Live Test</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2em; background: #f4f4f4; }
+    h1 { color: #333; }
+    input { padding: 8px; width: 200px; }
+    button { padding: 8px 12px; margin-left: 10px; }
+    .output { margin-top: 20px; background: white; padding: 15px; border-radius: 6px; box-shadow: 0 0 5px rgba(0,0,0,0.1); }
+    .error { color: red; }
+  </style>
+</head>
+<body>
+
+  <h1>AlphaPulse Live Test</h1>
+
+  <label>Stock Symbol:
+    <input type="text" id="symbol" placeholder="e.g. AAPL">
+  </label>
+  <br><br>
+  <button onclick="getLivePrice()">Get Live Price</button>
+  <button onclick="getPrediction()">Get Prediction</button>
+
+  <div class="output" id="output"></div>
+
+  <script>
+    const baseUrl = "https://alphapulse-backend-a2fpcqaneag6bqat.centralus-01.azurewebsites.net";
+
+    async function getLivePrice() {
+      const symbol = document.getElementById('symbol').value.trim();
+      if (!symbol) return showError("Please enter a symbol.");
+      try {
+        const res = await fetch(`${baseUrl}/live-price?symbol=${symbol}`);
+        const data = await res.json();
+        showOutput(`Live price for <b>${data.symbol}</b>: $${data.price}`);
+      } catch (err) {
+        showError("Failed to fetch live price.");
+      }
+    }
+
+    async function getPrediction() {
+      const symbol = document.getElementById('symbol').value.trim();
+      if (!symbol) return showError("Please enter a symbol.");
+      try {
+        const res = await fetch(`${baseUrl}/predict?symbol=${symbol}`);
+        const data = await res.json();
+        showOutput(
+          `Prediction for <b>${data.symbol}</b>:<br>` +
+          `Current Price: $${data.current_price}<br>` +
+          `Predicted Price: <b>$${data.predicted_price}</b>`
+        );
+      } catch (err) {
+        showError("Failed to fetch prediction.");
+      }
+    }
+
+    function showOutput(html) {
+      document.getElementById('output').innerHTML = html;
+    }
+
+    function showError(msg) {
+      document.getElementById('output').innerHTML = `<span class="error">${msg}</span>`;
+    }
+  </script>
+
+</body>
+</html>
