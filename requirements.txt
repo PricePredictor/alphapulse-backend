@@ -5,3 +5,4 @@ yfinance
 python-multipart
 pandas
 requests
+python
