@@ -65,7 +65,10 @@ def predict_ml(symbol: str, days: int = 30):
         df["SMA20"] = ta.trend.sma_indicator(df["Close"], window=20)
         df["EMA20"] = ta.trend.ema_indicator(df["Close"], window=20)
         df["RSI"] = ta.momentum.rsi(df["Close"], window=14)
-        df["MACD"] = ta.trend.macd_diff(df["Close"])
+
+        macd = ta.trend.MACD(df["Close"])  # ✅ FIXED: use MACD class not method
+        df["MACD"] = macd.macd_diff()
+
         bb = ta.volatility.BollingerBands(close=df["Close"], window=20, window_dev=2)
         df["BB_upper"] = bb.bollinger_hband()
         df["BB_lower"] = bb.bollinger_lband()
