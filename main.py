@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import yfinance as yf
 import random
-from datetime import datetime, timedelta
 
 app = FastAPI()
 
@@ -34,7 +33,7 @@ def predict_price(symbol: str):
     try:
         stock = yf.Ticker(symbol)
         price = stock.history(period="1d")["Close"].iloc[-1]
-        prediction = price * (1 + random.uniform(-0.02, 0.03))  # dummy prediction logic
+        prediction = price * (1 + random.uniform(-0.02, 0.03))  # dummy logic
         return {
             "symbol": symbol.upper(),
             "current_price": round(price, 2),
@@ -44,16 +43,26 @@ def predict_price(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/history")
-def get_price_history(symbol: str, days: int = 7):
+def get_price_history(symbol: str, days: Optional[int] = 7):
     try:
         stock = yf.Ticker(symbol)
-        end_date = datetime.today()
-        start_date = end_date - timedelta(days=days)
-        hist = stock.history(start=start_date, end=end_date)
-        history_data = [
-            {"date": date.strftime("%Y-%m-%d"), "close": round(close, 2)}
-            for date, close in zip(hist.index, hist["Close"])
-        ]
-        return {"symbol": symbol.upper(), "history": history_data}
+        hist = stock.history(period=f"{days}d")
+        if hist.empty:
+            raise HTTPException(status_code=404, detail="No data available.")
+        result = {
+            "symbol": symbol.upper(),
+            "history": [
+                {
+                    "date": str(date.date()),
+                    "open": round(row["Open"], 2),
+                    "high": round(row["High"], 2),
+                    "low": round(row["Low"], 2),
+                    "close": round(row["Close"], 2),
+                    "volume": int(row["Volume"])
+                }
+                for date, row in hist.iterrows()
+            ]
+        }
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
