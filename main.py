@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
+from typing import List
 import yfinance as yf
 import random
 
@@ -43,26 +43,57 @@ def predict_price(symbol: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/history")
-def get_price_history(symbol: str, days: Optional[int] = 7):
+def get_history(symbol: str, days: int = 5):
     try:
         stock = yf.Ticker(symbol)
         hist = stock.history(period=f"{days}d")
-        if hist.empty:
-            raise HTTPException(status_code=404, detail="No data available.")
-        result = {
-            "symbol": symbol.upper(),
-            "history": [
-                {
-                    "date": str(date.date()),
-                    "open": round(row["Open"], 2),
-                    "high": round(row["High"], 2),
-                    "low": round(row["Low"], 2),
-                    "close": round(row["Close"], 2),
-                    "volume": int(row["Volume"])
-                }
-                for date, row in hist.iterrows()
-            ]
-        }
-        return result
+        result = [
+            {"date": str(idx.date()), "close": round(row["Close"], 2)}
+            for idx, row in hist.iterrows()
+        ]
+        return {"symbol": symbol.upper(), "history": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/backtest")
+def backtest(symbol: str, days: int = 5):
+    try:
+        stock = yf.Ticker(symbol)
+        hist = stock.history(period=f"{days}d")
+        predictions = []
+        actuals = []
+
+        for price in hist["Close"]:
+            prediction = price * (1 + random.uniform(-0.02, 0.03))
+            predictions.append(round(prediction, 2))
+            actuals.append(round(price, 2))
+
+        mae = round(sum(abs(p - a) for p, a in zip(predictions, actuals)) / len(predictions), 2)
+
+        return {
+            "symbol": symbol.upper(),
+            "actual": actuals,
+            "predicted": predictions,
+            "mean_absolute_error": mae
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/accuracy")
+def model_accuracy():
+    return {
+        "description": "Dummy accuracy metric for placeholder",
+        "mean_absolute_error": 2.85,
+        "last_updated": "2025-05-14"
+    }
+
+@app.get("/top-movers")
+def top_movers():
+    return {
+        "gainers": ["TSLA", "NVDA", "MSFT"],
+        "losers": ["AAPL", "AMZN", "META"]
+    }
+
+@app.get("/health")
+def health_check():
+    return {"status": "OK", "uptime": "active"}
