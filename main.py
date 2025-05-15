@@ -2,9 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import yfinance as yf
-import pandas as pd
-import numpy as np
-from sklearn.linear_model import LinearRegression
+import random
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
@@ -19,7 +18,7 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"status": "AlphaPulse backend running with real ML model"}
+    return {"status": "AlphaPulse backend running"}
 
 @app.get("/live-price")
 def get_live_price(symbol: str):
@@ -34,29 +33,27 @@ def get_live_price(symbol: str):
 def predict_price(symbol: str):
     try:
         stock = yf.Ticker(symbol)
-        hist = stock.history(period="60d")
-        if hist.empty or len(hist) < 30:
-            raise ValueError("Not enough historical data to make a prediction.")
-
-        hist = hist[["Close"]].dropna()
-        hist["Day"] = np.arange(len(hist))
-
-        # Linear regression on 'Day' vs 'Close'
-        X = hist[["Day"]]
-        y = hist["Close"]
-        model = LinearRegression()
-        model.fit(X, y)
-
-        next_day = [[X.values[-1][0] + 1]]
-        predicted_price = model.predict(next_day)[0]
-        current_price = y.iloc[-1]
-
+        price = stock.history(period="1d")["Close"].iloc[-1]
+        prediction = price * (1 + random.uniform(-0.02, 0.03))  # dummy prediction logic
         return {
             "symbol": symbol.upper(),
-            "current_price": round(current_price, 2),
-            "predicted_price": round(predicted_price, 2),
-            "model": "Linear Regression on 60-day trend"
+            "current_price": round(price, 2),
+            "predicted_price": round(prediction, 2)
         }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/history")
+def get_price_history(symbol: str, days: int = 7):
+    try:
+        stock = yf.Ticker(symbol)
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=days)
+        hist = stock.history(start=start_date, end=end_date)
+        history_data = [
+            {"date": date.strftime("%Y-%m-%d"), "close": round(close, 2)}
+            for date, close in zip(hist.index, hist["Close"])
+        ]
+        return {"symbol": symbol.upper(), "history": history_data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
