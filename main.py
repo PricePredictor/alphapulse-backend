@@ -10,7 +10,6 @@ from sklearn.linear_model import LinearRegression
 
 app = FastAPI()
 
-# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,20 +18,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-accuracy_tracker = {
-    "total": 0,
-    "correct": 0
-}
+accuracy_tracker = {"total": 0, "correct": 0}
 
 @app.get("/")
 def read_root():
     return {"status": "AlphaPulse backend running"}
 
+@app.get("/health-check")
+def health():
+    return {"status": "healthy"}
+
 @app.get("/live-price")
 def get_live_price(symbol: str):
     try:
         stock = yf.Ticker(symbol)
-        price = stock.history(period="1d")["Close"].iloc[-1]
+        hist = stock.history(period="1d")
+        if hist.empty:
+            raise HTTPException(status_code=404, detail="No data found")
+        price = hist["Close"].iloc[-1]
         return {"symbol": symbol.upper(), "price": round(price, 2)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -41,7 +44,10 @@ def get_live_price(symbol: str):
 def predict_price(symbol: str):
     try:
         stock = yf.Ticker(symbol)
-        price = stock.history(period="1d")["Close"].iloc[-1]
+        hist = stock.history(period="1d")
+        if hist.empty:
+            raise HTTPException(status_code=404, detail="No data found")
+        price = hist["Close"].iloc[-1]
         prediction = price * (1 + random.uniform(-0.02, 0.03))
         accuracy_tracker["total"] += 1
         if random.choice([True, False]):
@@ -58,7 +64,7 @@ def predict_price(symbol: str):
 def predict_ml(symbol: str, days: int = 30):
     try:
         stock = yf.Ticker(symbol)
-        df = stock.history(period=f"{days + 20}d")  # extra buffer for indicators
+        df = stock.history(period=f"{days + 30}d")
         if df.empty or len(df) < days:
             raise HTTPException(status_code=400, detail="Insufficient data")
 
@@ -73,27 +79,20 @@ def predict_ml(symbol: str, days: int = 30):
         df.dropna(inplace=True)
 
         feature_cols = ["SMA20", "EMA20", "RSI", "MACD", "BB_upper", "BB_lower"]
+        if len(df) < 2:
+            raise HTTPException(status_code=400, detail="Not enough rows after indicators")
         X = df[feature_cols].iloc[:-1]
         y = df["Close"].iloc[1:]
-
-        if X.empty:
-            raise HTTPException(status_code=400, detail="Not enough data after indicators")
-
         model = LinearRegression()
         model.fit(X, y)
-
-        last_features = df[feature_cols].iloc[[-1]]
-        predicted_price = model.predict(last_features)[0]
-        current_price = df["Close"].iloc[-1]
-
+        predicted_price = model.predict(df[feature_cols].iloc[[-1]])[0]
         return {
             "symbol": symbol.upper(),
-            "current_price": round(current_price, 2),
+            "current_price": round(df["Close"].iloc[-1], 2),
             "predicted_price": round(predicted_price, 2),
             "model": "Linear Regression (technical indicators)",
             "features_used": feature_cols
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -113,10 +112,11 @@ def backtest(symbol: str, days: Optional[int] = 10):
     try:
         stock = yf.Ticker(symbol)
         data = stock.history(period=f"{days + 1}d")
+        if data.empty or len(data) <= 1:
+            return {"symbol": symbol.upper(), "backtest": []}
+        result = []
         dates = list(data.index)
         closes = data["Close"].tolist()
-
-        result = []
         for i in range(1, len(closes)):
             actual = closes[i]
             predicted = closes[i - 1] * (1 + random.uniform(-0.02, 0.03))
@@ -138,7 +138,7 @@ def get_accuracy():
         return {
             "evaluated_predictions": total,
             "accurate_predictions": correct,
-            "accuracy_percent": round((correct / total) * 100, 2) if total > 0 else None
+            "accuracy_percent": round((correct / total) * 100, 2) if total else None
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -151,15 +151,12 @@ def get_top_movers():
         for sym in symbols:
             stock = yf.Ticker(sym)
             data = stock.history(period="2d")
-            if len(data) >= 2:
-                close_yesterday = data["Close"].iloc[-2]
-                close_today = data["Close"].iloc[-1]
-                percent_change = ((close_today - close_yesterday) / close_yesterday) * 100
-                movers.append({
-                    "symbol": sym,
-                    "change_percent": round(percent_change, 2)
-                })
-        sorted_movers = sorted(movers, key=lambda x: abs(x["change_percent"]), reverse=True)
-        return {"top_movers": sorted_movers}
+            if len(data) < 2:
+                continue
+            close_yesterday = data["Close"].iloc[-2]
+            close_today = data["Close"].iloc[-1]
+            change = ((close_today - close_yesterday) / close_yesterday) * 100
+            movers.append({"symbol": sym, "change_percent": round(change, 2)})
+        return {"top_movers": sorted(movers, key=lambda x: abs(x["change_percent"]), reverse=True)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
