@@ -60,8 +60,8 @@ def predict_ml(symbol: str, days: int = 60):
         stock = yf.Ticker(symbol)
         df = stock.history(period=f"{days + 50}d")
 
-        if df.empty or len(df) < 60:
-            raise HTTPException(status_code=400, detail="Not enough data to compute features. Try increasing 'days'.")
+        if df.empty or len(df) < days:
+            raise HTTPException(status_code=400, detail="Not enough raw data to compute features.")
 
         df["SMA20"] = ta.trend.sma_indicator(df["Close"], window=20)
         df["EMA20"] = ta.trend.ema_indicator(df["Close"], window=20)
@@ -77,17 +77,15 @@ def predict_ml(symbol: str, days: int = 60):
         df.dropna(inplace=True)
 
         feature_cols = ["SMA20", "EMA20", "RSI", "MACD", "BB_upper", "BB_lower"]
-
-        if len(df) < 2:
-            raise HTTPException(status_code=422, detail="Not enough rows after feature engineering.")
+        if df.shape[0] < 2:
+            raise HTTPException(status_code=422, detail="Not enough rows after calculating indicators.")
 
         df = df[feature_cols + ["Close"]]
-
         X = df[feature_cols].iloc[:-1]
         y = df["Close"].iloc[1:]
 
         if X.empty or y.empty:
-            raise HTTPException(status_code=422, detail="Insufficient training data after filtering.")
+            raise HTTPException(status_code=422, detail="Model training failed due to empty feature set.")
 
         model = LinearRegression()
         model.fit(X, y)
