@@ -1,16 +1,21 @@
+# ======================
+# main.py
+# ======================
+# FastAPI backend using pre-trained models saved from train_models.py
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from typing import Optional
 import yfinance as yf
-import random
 import pandas as pd
 import numpy as np
-import ta
-from sklearn.linear_model import LinearRegression
+import joblib
+import tensorflow as tf
 from xgboost import XGBRegressor
+import ta
 
 app = FastAPI()
 
+# Allow CORS for local development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,112 +24,73 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-accuracy_tracker = {"total": 0, "correct": 0}
-
-@app.get("/")
-def read_root():
-    return {"status": "AlphaPulse backend running"}
-
-@app.get("/health-check")
-def health():
-    return {"status": "healthy"}
-
-@app.get("/live-price")
-def get_live_price(symbol: str):
+# ---------- Endpoint: Predict with XGBoost ----------
+@app.get("/predict-xgb")
+def predict_xgb(ticker: str = "AAPL"):
     try:
-        stock = yf.Ticker(symbol)
-        hist = stock.history(period="1d")
-        if hist.empty:
-            raise HTTPException(status_code=404, detail="No data found")
-        price = hist["Close"].iloc[-1]
-        return {"symbol": symbol.upper(), "price": round(price, 2)}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        model = joblib.load("xgb_model.pkl")
+        df = yf.download(ticker, period="3mo", interval="1d")
 
-@app.get("/predict")
-def predict_price(symbol: str):
-    try:
-        stock = yf.Ticker(symbol)
-        hist = stock.history(period="1d")
-        if hist.empty:
-            raise HTTPException(status_code=404, detail="No data found")
-        price = hist["Close"].iloc[-1]
-        prediction = price * (1 + random.uniform(-0.02, 0.03))
-        accuracy_tracker["total"] += 1
-        if random.choice([True, False]):
-            accuracy_tracker["correct"] += 1
-        return {
-            "symbol": symbol.upper(),
-            "current_price": round(price, 2),
-            "predicted_price": round(prediction, 2)
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        df['SMA_10'] = ta.trend.sma_indicator(df['Close'], window=10)
+        df['SMA_50'] = ta.trend.sma_indicator(df['Close'], window=50)
+        df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
 
-@app.get("/predict-ml-advanced")
-def predict_ml_advanced(symbol: str, days: int = 30):
-    try:
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=f"{days + 50}d")
-        if df.empty or len(df) < days:
-            raise HTTPException(status_code=400, detail="Insufficient data")
-
-        df["SMA20"] = ta.trend.sma_indicator(df["Close"], window=20)
-        df["EMA20"] = ta.trend.ema_indicator(df["Close"], window=20)
-        df["RSI"] = ta.momentum.rsi(df["Close"], window=14)
-        df["MACD"] = ta.trend.macd_diff(df["Close"])
-        bb = ta.volatility.BollingerBands(close=df["Close"], window=20, window_dev=2)
-        df["BB_upper"] = bb.bollinger_hband()
-        df["BB_lower"] = bb.bollinger_lband()
-        df.dropna(inplace=True)
-
-        features = ["SMA20", "EMA20", "RSI", "MACD", "BB_upper", "BB_lower"]
-        X = df[features].iloc[:-1]
-        y = df["Close"].iloc[1:]
-
-        if len(X) < 10:
-            raise HTTPException(status_code=400, detail="Too few samples for model training")
-
-        xgb = XGBRegressor(n_estimators=50, learning_rate=0.1, max_depth=3)
-        xgb.fit(X, y)
-        predicted_price = xgb.predict(df[features].iloc[[-1]])[0]
-
-        return {
-            "symbol": symbol.upper(),
-            "current_price": round(df['Close'].iloc[-1], 2),
-            "predicted_price": round(predicted_price, 2),
-            "model": "XGBoost",
-            "features_used": features
-        }
+        latest = df.dropna().iloc[-1]
+        input_features = [[latest['SMA_10'], latest['SMA_50'], latest['RSI']]]
+        prediction = model.predict(input_features)[0]
+        return {"ticker": ticker, "predicted_price": round(prediction, 2)}
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/backtest-enhanced")
-def backtest_enhanced(symbol: str, days: int = 30):
+
+# ---------- Endpoint: Predict with LSTM ----------
+@app.get("/predict-lstm")
+def predict_lstm(ticker: str = "AAPL", sequence_length: int = 50):
     try:
-        stock = yf.Ticker(symbol)
-        df = stock.history(period=f"{days + 1}d")
+        model = tf.keras.models.load_model("lstm_model.h5")
+        scaler = joblib.load("lstm_scaler.save")
 
-        if df.empty or len(df) <= 1:
-            raise HTTPException(status_code=400, detail="Not enough historical data for backtesting.")
+        df = yf.download(ticker, period="3mo", interval="1d")
+        close_prices = df[['Close']].values
+        scaled = scaler.transform(close_prices)
 
-        df = df[["Close"]].copy()
-        df["Predicted"] = df["Close"].shift(1) * (1 + random.uniform(-0.02, 0.03))
-        df.dropna(inplace=True)
-        df["Error"] = (df["Close"] - df["Predicted"]).abs()
-        df["APE"] = df["Error"] / df["Close"] * 100
+        X_test = [scaled[-sequence_length:]]
+        X_test = np.array(X_test).reshape(1, sequence_length, 1)
 
-        backtest_results = df.reset_index()[["Date", "Close", "Predicted", "Error", "APE"]]
-        avg_error = df["Error"].mean()
-        mape = df["APE"].mean()
+        predicted_scaled = model.predict(X_test)
+        predicted_price = scaler.inverse_transform(predicted_scaled)[0][0]
 
-        return {
-            "symbol": symbol.upper(),
-            "days_evaluated": len(df),
-            "average_error": round(avg_error, 2),
-            "mape_percent": round(mape, 2),
-            "backtest": backtest_results.to_dict(orient="records")
-        }
+        return {"ticker": ticker, "predicted_price": round(predicted_price, 2)}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ---------- Endpoint: Backtesting Strategy ----------
+@app.get("/backtest")
+def backtest(ticker: str = "AAPL", short_window: int = 10, long_window: int = 50):
+    df = yf.download(ticker, period="6mo", interval="1d")
+    df['SMA_Short'] = ta.trend.sma_indicator(df['Close'], window=short_window)
+    df['SMA_Long'] = ta.trend.sma_indicator(df['Close'], window=long_window)
+    df.dropna(inplace=True)
+
+    df['Signal'] = 0
+    df.loc[df['SMA_Short'] > df['SMA_Long'], 'Signal'] = 1
+    df.loc[df['SMA_Short'] <= df['SMA_Long'], 'Signal'] = -1
+
+    df['Daily_Return'] = df['Close'].pct_change()
+    df['Strategy_Return'] = df['Signal'].shift(1) * df['Daily_Return']
+
+    cumulative = (1 + df['Strategy_Return']).cumprod()
+    total_return = cumulative.iloc[-1] - 1
+    sharpe = (df['Strategy_Return'].mean() / df['Strategy_Return'].std()) * np.sqrt(252)
+
+    return {
+        "ticker": ticker,
+        "total_return_percent": round(total_return * 100, 2),
+        "sharpe_ratio": round(sharpe, 2),
+        "last_price": round(df['Close'].iloc[-1], 2),
+        "start_date": df.index[0].strftime('%Y-%m-%d'),
+        "end_date": df.index[-1].strftime('%Y-%m-%d')
+    }
