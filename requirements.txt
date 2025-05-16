@@ -1,8 +1,11 @@
-fastapi
-uvicorn
-yfinance
+xgboost
+tensorflow
+scikit-learn
 pandas
 numpy
 ta
-scikit-learn
-xgboost
+yfinance
+matplotlib
+fastapi
+uvicorn
+joblib
