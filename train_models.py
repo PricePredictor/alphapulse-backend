@@ -83,13 +83,14 @@ def train_random_forest_model(ticker="AAPL"):
 # ---------- Train LightGBM Model ----------
 def train_lightgbm_model(ticker="AAPL"):
     df = yf.download(ticker, period="1y", interval="1d")
-    close = df[['Close']].squeeze()  # Ensure 1D Series
+    close = df[['Close']].squeeze()
     df['SMA_10'] = SMAIndicator(close=close, window=10).sma_indicator()
     df['SMA_50'] = SMAIndicator(close=close, window=50).sma_indicator()
     df['RSI'] = RSIIndicator(close=close, window=14).rsi()
     df.dropna(inplace=True)
 
-    X = df[['SMA_10', 'SMA_50', 'RSI']]
+    X = df[['SMA_10', 'SMA_50', 'RSI']].copy()
+    X.columns = ['SMA10', 'SMA50', 'RSI']  # clean feature names
     y = df['Close'].shift(-1)
     X = X[:-1]
     y = y[:-1]
@@ -97,6 +98,7 @@ def train_lightgbm_model(ticker="AAPL"):
     model = lgb.LGBMRegressor()
     model.fit(X, y)
     joblib.dump(model, "lightgbm.pkl")
+    
 
 # ---------- Run all model trainings ----------
 if __name__ == "__main__":
