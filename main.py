@@ -243,7 +243,7 @@ def get_model_accuracy(model: str = "xgb"):
 
         if model.lower() == "xgb":
             X = df[['SMA_10', 'SMA_50', 'RSI']]
-            y = df['Close']
+            y = df['Close'].values  # Ensure it's a NumPy array
             preds = xgb_model.predict(X)
             mse = np.mean((preds - y) ** 2)
 
