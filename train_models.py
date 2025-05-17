@@ -1,7 +1,7 @@
 # ======================
 # train_models.py
 # ======================
-# This script trains the XGBoost and LSTM models separately
+# This script trains XGBoost, LSTM, Random Forest, and LightGBM models
 # and saves them to disk for production use.
 
 import yfinance as yf
@@ -29,7 +29,6 @@ def train_xgboost_model(ticker="AAPL"):
 
     X = df[['SMA_10', 'SMA_50', 'RSI']]
     y = df['Close'].shift(-1)
-
     X = X[:-1]
     y = y[:-1]
 
@@ -63,10 +62,6 @@ def train_lstm_model(ticker="AAPL", sequence_length=50):
     model.save("lstm_model.h5")
     joblib.dump(scaler, "lstm_scaler.save")
 
-
-
-
-
 # ---------- Train Random Forest Model ----------
 def train_random_forest_model(ticker="AAPL"):
     df = yf.download(ticker, period="1y", interval="1d")
@@ -77,7 +72,6 @@ def train_random_forest_model(ticker="AAPL"):
 
     X = df[['SMA_10', 'SMA_50', 'RSI']]
     y = df['Close'].shift(-1)
-
     X = X[:-1]
     y = y[:-1]
 
@@ -95,7 +89,6 @@ def train_lightgbm_model(ticker="AAPL"):
 
     X = df[['SMA_10', 'SMA_50', 'RSI']]
     y = df['Close'].shift(-1)
-
     X = X[:-1]
     y = y[:-1]
 
