@@ -184,17 +184,17 @@ def backtest(ticker: str = "AAPL", model: str = "xgb", start: str = "2023-01-01"
             df['RSI'] = rsi(df['Close'].squeeze(), window=14)
             df.dropna(inplace=True)
 
+            if len(df) < 1:
+                raise HTTPException(status_code=404, detail="Not enough data after feature generation.")
+
             predictions = []
             actuals = []
 
             for i in range(len(df)):
-                if i < 50:
-                    continue
-                row = df.iloc[i]
                 features = df[['SMA_10', 'SMA_50', 'RSI']].iloc[i].values.reshape(1, -1)
                 pred = xgb_model.predict(features)[0]
                 predictions.append(pred)
-                actuals.append(row['Close'])
+                actuals.append(df.iloc[i]['Close'])
 
         elif model.lower() == "lstm":
             close_prices = df[['Close']].values
