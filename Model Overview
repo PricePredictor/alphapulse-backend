@@ -1,0 +1,65 @@
+# AlphaPulse API Overview (All Endpoints Implemented)
+
+## ✅ Completed Endpoints
+
+### 1. `/` (root)
+- **Description:** Health check endpoint
+- **Method:** GET
+- **Response:** `{ "message": "AlphaPulse FastAPI backend is live." }`
+
+### 2. `/health`
+- **Description:** Health status indicator
+- **Method:** GET
+- **Response:** `{ "status": "ok" }`
+
+### 3. `/predict-xgb`
+- **Description:** Predict price using XGBoost model
+- **Query Param:** `ticker` (e.g., AAPL)
+- **Method:** GET
+- **Response:** `{ "ticker": "AAPL", "model": "XGBoost", "prediction": <value> }`
+
+### 4. `/predict-lstm`
+- **Description:** Predict price using LSTM model
+- **Query Param:** `ticker` (e.g., AAPL)
+- **Optional:** `sequence_length` (default: 50)
+- **Method:** GET
+- **Response:** `{ "ticker": "AAPL", "model": "LSTM", "prediction": <value> }`
+
+### 5. `/predict-all`
+- **Description:** Returns predictions from all models for a given ticker
+- **Query Param:** `ticker`
+- **Method:** GET
+- **Response:** `{ "ticker": "AAPL", "predictions": { "XGBoost": <value>, "LSTM": <value> } }`
+
+### 6. `/history`
+- **Description:** Returns historical price data
+- **Query Param:** `ticker`, `period` (e.g., 1y), `interval` (e.g., 1d)
+- **Method:** GET
+- **Response:** JSON array of prices
+
+### 7. `/backtest`
+- **Description:** Runs backtesting on prediction models
+- **Query Param:** `ticker`, `model`, `start`, `end`
+- **Method:** GET
+- **Response:** backtest metrics (e.g., accuracy, return, MSE)
+
+### 8. `/accuracy`
+- **Description:** Returns model accuracy on test data
+- **Query Param:** `model`
+- **Method:** GET
+- **Response:** `{ "model": "XGBoost", "accuracy": 0.87 }`
+
+### 9. `/top-movers`
+- **Description:** Shows top moving stocks today
+- **Method:** GET
+- **Response:** JSON of top gainers/losers
+
+### 10. `/live-price`
+- **Description:** Fetches current market price for given ticker
+- **Query Param:** `ticker`
+- **Method:** GET
+- **Response:** `{ "ticker": "AAPL", "price": 187.12 }`
+
+---
+
+Let me know if you want to test them, add docs, or build a frontend next.
