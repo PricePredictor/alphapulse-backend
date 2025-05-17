@@ -57,4 +57,48 @@ def train_lstm_model(ticker="AAPL", sequence_length=50):
     model.add(LSTM(units=50))
     model.add(Dense(1))
     model.compile(optimizer='adam', loss='mean_squared_error')
-    model.fit(X, y, epochs=10
+    model.fit(X, y, epochs=10, batch_size=32, verbose=0)
+
+    model.save("lstm_model.h5")
+    joblib.dump(scaler, "lstm_scaler.save")
+
+# ---------- Train Random Forest Model ----------
+def train_random_forest_model(ticker="AAPL"):
+    df = yf.download(ticker, period="1y", interval="1d")
+    df['SMA_10'] = sma_indicator(close=df['Close'], window=10)
+    df['SMA_50'] = sma_indicator(close=df['Close'], window=50)
+    df['RSI'] = rsi(close=df['Close'], window=14)
+    df.dropna(inplace=True)
+
+    X = df[['SMA_10', 'SMA_50', 'RSI']]
+    y = df['Close'].shift(-1)
+    X = X[:-1]
+    y = y[:-1]
+
+    model = RandomForestRegressor(n_estimators=100, random_state=42)
+    model.fit(X, y)
+    joblib.dump(model, "random_forest.pkl")
+
+# ---------- Train LightGBM Model ----------
+def train_lightgbm_model(ticker="AAPL"):
+    df = yf.download(ticker, period="1y", interval="1d")
+    df['SMA_10'] = sma_indicator(close=df['Close'], window=10)
+    df['SMA_50'] = sma_indicator(close=df['Close'], window=50)
+    df['RSI'] = rsi(close=df['Close'], window=14)
+    df.dropna(inplace=True)
+
+    X = df[['SMA_10', 'SMA_50', 'RSI']]
+    y = df['Close'].shift(-1)
+    X = X[:-1]
+    y = y[:-1]
+
+    model = lgb.LGBMRegressor()
+    model.fit(X, y)
+    joblib.dump(model, "lightgbm.pkl")
+
+# ---------- Run all model trainings ----------
+if __name__ == "__main__":
+    train_xgboost_model()
+    train_lstm_model()
+    train_random_forest_model()
+    train_lightgbm_model()
