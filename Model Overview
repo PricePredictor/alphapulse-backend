@@ -35,10 +35,6 @@
 - **Query Param:** `ticker`, `period` (e.g., 1y), `interval` (e.g., 1d)
 - **Response:** JSON array of prices
 
----
-
-## 🧪 Upcoming Endpoints
-
 ### 7. `/backtest`
 - **Description:** Runs backtesting on prediction models
 - **Query Param:** `ticker`, `model`, `start`, `end`
@@ -55,8 +51,20 @@
 
 ### 10. `/live-price`
 - **Description:** Fetches current market price for given ticker
-- **Response:** `{ "ticker": "AAPL", "price": 187.12 }`
+- **Response:** `{ "ticker": "AAPL", "price": 187.12, "timestamp": "<timestamp>" }`
 
 ---
 
-Let me know which endpoint you’d like to implement next!
+## 🔄 Upcoming Model Endpoints
+
+### 11. `/predict-rf` (Random Forest)
+- **Description:** Predicts price using Random Forest model
+- **Query Param:** `ticker`
+- **Response:** `{ "ticker": "AAPL", "model": "RandomForest", "prediction": <value> }`
+
+### 12. `/predict-lr` (Linear Regression)
+- **Description:** Predicts price using Linear Regression model
+- **Query Param:** `ticker`
+- **Response:** `{ "ticker": "AAPL", "model": "LinearRegression", "prediction": <value> }`
+
+Let me know which new model to add first, and I’ll guide setup, training, and API logic.
