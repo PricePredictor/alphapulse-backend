@@ -63,10 +63,8 @@ def train_lstm_model(ticker="AAPL", sequence_length=50):
     model.save("lstm_model.h5")
     joblib.dump(scaler, "lstm_scaler.save")
 
-# ---------- Run both model trainings ----------
-if __name__ == "__main__":
-    train_xgboost_model()
-    train_lstm_model()
+
+
 
 
 # ---------- Train Random Forest Model ----------
@@ -105,3 +103,9 @@ def train_lightgbm_model(ticker="AAPL"):
     model.fit(X, y)
     joblib.dump(model, "lightgbm.pkl")
 
+# ---------- Run all model trainings ----------
+if __name__ == "__main__":
+    train_xgboost_model()
+    train_lstm_model()
+    train_random_forest_model()
+    train_lightgbm_model()
