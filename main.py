@@ -12,8 +12,10 @@ import joblib
 from xgboost import XGBRegressor
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import MinMaxScaler
-from ta.trend import sma_indicator
-from ta.momentum import rsi
+from ta.trend import SMAIndicator
+from ta.momentum import RSIIndicator
+from sklearn.ensemble import RandomForestRegressor
+import lightgbm as lgb
 
 # Initialize app
 app = FastAPI()
@@ -32,20 +34,59 @@ try:
     xgb_model: XGBRegressor = joblib.load("xgb_model.pkl")
     lstm_model = load_model("lstm_model.h5")
     lstm_scaler: MinMaxScaler = joblib.load("lstm_scaler.save")
+    rf_model = joblib.load("random_forest.pkl")
+    lgb_model = joblib.load("lightgbm.pkl")
 except Exception as e:
     raise RuntimeError(f"Model loading failed: {str(e)}")
 
 # -------------------------
-# Health & root endpoints
+# Unified Predict Endpoint
 # -------------------------
-@app.get("/")
-def root():
-    return {"message": "AlphaPulse FastAPI backend is live."}
+@app.get("/predict")
+def predict_price(ticker: str, model_type: str = "xgb"):
+    try:
+        df = yf.download(ticker, period="6mo", interval="1d")
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Stock data not found")
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+        close = df[['Close']].squeeze()
+        df['SMA_10'] = SMAIndicator(close=close, window=10).sma_indicator()
+        df['SMA_50'] = SMAIndicator(close=close, window=50).sma_indicator()
+        df['RSI'] = RSIIndicator(close=close, window=14).rsi()
+        df.dropna(inplace=True)
 
+        X = df[['SMA_10', 'SMA_50', 'RSI']].copy()
+        X.columns = ['SMA10', 'SMA50', 'RSI']
+        last_row = X.iloc[-1:].values
+
+        if model_type == "xgb":
+            prediction = xgb_model.predict(last_row)[0]
+        elif model_type == "rf":
+            prediction = rf_model.predict(last_row)[0]
+        elif model_type == "lgb":
+            prediction = lgb_model.predict(last_row)[0]
+        elif model_type == "lstm":
+            scaled = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
+            last_sequence = scaled[-50:].reshape(1, 50, 1)
+            prediction = lstm_scaler.inverse_transform(lstm_model.predict(last_sequence))[0][0]
+        else:
+            raise HTTPException(status_code=400, detail="Invalid or missing model type")
+
+        return {
+            "ticker": ticker.upper(),
+            "model": model_type.upper(),
+            "predicted_price": round(float(prediction), 2)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# -------------------------
+# Deprecated Endpoints (commented out for backup)
+# -------------------------
+
+"""
 # -------------------------
 # XGBoost Prediction
 # -------------------------
@@ -69,7 +110,6 @@ def predict_xgb(ticker: str = "AAPL"):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # -------------------------
 # LSTM Prediction
@@ -101,11 +141,9 @@ def predict_lstm(ticker: str = "AAPL", sequence_length: int = 50):
 # -------------------------
 # PREDICT ALL Prediction
 # -------------------------
-
 @app.get("/predict-all")
 def predict_all(ticker: str = "AAPL", sequence_length: int = 50):
     try:
-        # --- XGBoost prediction ---
         df_xgb = yf.download(ticker, period="3mo", interval="1d")
         df_xgb['SMA_10'] = sma_indicator(df_xgb['Close'].squeeze(), window=10)
         df_xgb['SMA_50'] = sma_indicator(df_xgb['Close'].squeeze(), window=50)
@@ -115,7 +153,6 @@ def predict_all(ticker: str = "AAPL", sequence_length: int = 50):
         xgb_features = df_xgb[['SMA_10', 'SMA_50', 'RSI']].values[-1].reshape(1, -1)
         xgb_prediction = xgb_model.predict(xgb_features)[0]
 
-        # --- LSTM prediction ---
         df_lstm = yf.download(ticker, period="6mo", interval="1d")
         close_prices = df_lstm[['Close']].values
         scaled = lstm_scaler.transform(close_prices)
@@ -137,206 +174,4 @@ def predict_all(ticker: str = "AAPL", sequence_length: int = 50):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-# -------------------------
-# History
-# -------------------------
-@app.get("/history")
-def get_history(ticker: str, period: str = "1mo", interval: str = "1d"):
-    try:
-        df = yf.download(ticker, period=period, interval=interval)
-
-        if df.empty:
-            raise HTTPException(status_code=404, detail="No data returned from Yahoo Finance.")
-
-        if 'Date' not in df.columns:
-            df.reset_index(inplace=True)
-
-        if 'Date' not in df.columns:
-            raise HTTPException(status_code=500, detail="Date column missing in returned data.")
-
-        df['Date'] = df['Date'].astype(str)  # ensure JSON serializable
-        history = df[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']].to_dict(orient="records")
-
-        return {
-            "ticker": ticker,
-            "period": period,
-            "interval": interval,
-            "history": history
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# -------------------------
-# BackTest
-# -------------------------
-
-@app.get("/backtest")
-def backtest(ticker: str = "AAPL", model: str = "xgb", start: str = "2023-01-01", end: str = "2023-03-01"):
-    try:
-        df = yf.download(ticker, start=start, end=end, interval="1d")
-        df.dropna(inplace=True)
-
-        if model.lower() == "xgb":
-            df['SMA_10'] = sma_indicator(df['Close'].squeeze(), window=10)
-            df['SMA_50'] = sma_indicator(df['Close'].squeeze(), window=50)
-            df['RSI'] = rsi(df['Close'].squeeze(), window=14)
-            df.dropna(inplace=True)
-
-            if len(df) < 1:
-                raise HTTPException(status_code=404, detail="Not enough data after feature generation.")
-
-            predictions = []
-            actuals = []
-
-            for i in range(len(df)):
-                features = df[['SMA_10', 'SMA_50', 'RSI']].iloc[i].values.reshape(1, -1)
-                pred = xgb_model.predict(features)[0]
-                predictions.append(pred)
-                actuals.append(df.iloc[i]['Close'])
-
-        elif model.lower() == "lstm":
-            close_prices = df[['Close']].values
-            scaled = lstm_scaler.transform(close_prices)
-
-            sequence_length = 50
-            predictions = []
-            actuals = []
-
-            for i in range(sequence_length, len(scaled)):
-                X = scaled[i-sequence_length:i].reshape(1, sequence_length, 1)
-                pred_scaled = lstm_model.predict(X)
-                pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
-                predictions.append(pred)
-                actuals.append(close_prices[i][0])
-
-        else:
-            raise HTTPException(status_code=400, detail="Model must be 'xgb' or 'lstm'")
-
-        mse = mean_squared_error(actuals, predictions)
-        return {
-            "ticker": ticker,
-            "model": model.upper(),
-            "start": start,
-            "end": end,
-            "mse": round(mse, 4),
-            "n_predictions": len(predictions)
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# -------------------------
-# Accuracy
-# -------------------------
-@app.get("/accuracy")
-def get_model_accuracy(model: str = "xgb"):
-    try:
-        ticker = "AAPL"
-        df = yf.download(ticker, period="6mo", interval="1d")
-        df['SMA_10'] = sma_indicator(df['Close'].squeeze(), window=10)
-        df['SMA_50'] = sma_indicator(df['Close'].squeeze(), window=50)
-        df['RSI'] = rsi(df['Close'].squeeze(), window=14)
-        df.dropna(inplace=True)
-
-        if model.lower() == "xgb":
-            X = df[['SMA_10', 'SMA_50', 'RSI']]
-            y = df['Close'].values  # Ensure it's a NumPy array
-            preds = xgb_model.predict(X)
-            mse = np.mean((preds - y) ** 2)
-
-            return {
-                "model": "XGBoost",
-                "mse": round(mse, 2),
-                "n_test_samples": len(y)
-            }
-
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported model for accuracy endpoint.")
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# -------------------------
-# Top Movers
-# -------------------------
-@app.get("/top-movers")
-def top_movers():
-    try:
-        tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMZN", "META", "NFLX", "INTC", "AMD"]
-        movers = []
-
-        for ticker in tickers:
-            df = yf.download(ticker, period="2d", interval="1d", progress=False)
-
-            # Validate dataframe
-            if df is None or df.empty or "Close" not in df.columns:
-                continue
-
-            close_series = df["Close"]
-
-            # Additional sanity checks
-            if not isinstance(close_series, pd.Series):
-                continue
-            if close_series.isnull().any():
-                continue
-            if len(close_series) < 2:
-                continue
-
-            prev_close = close_series.iloc[-2]
-            latest_close = close_series.iloc[-1]
-
-            # Avoid divide-by-zero
-            if prev_close == 0:
-                continue
-
-            change_pct = ((latest_close - prev_close) / prev_close) * 100
-
-            movers.append({
-                "ticker": ticker,
-                "change_percent": round(change_pct, 2),
-                "price": round(latest_close, 2)
-            })
-
-        gainers = sorted(
-            [m for m in movers if m["change_percent"] > 0],
-            key=lambda x: -x["change_percent"]
-        )[:5]
-
-        losers = sorted(
-            [m for m in movers if m["change_percent"] < 0],
-            key=lambda x: x["change_percent"]
-        )[:5]
-
-        return {
-            "gainers": gainers,
-            "losers": losers
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# -------------------------
-# Live Price
-# -------------------------
-@app.get("/live-price")
-def get_live_price(ticker: str = "AAPL"):
-    try:
-        ticker_data = yf.Ticker(ticker)
-        live_price = ticker_data.history(period="1d", interval="1m")  # most recent 1-minute data
-
-        if live_price.empty:
-            raise HTTPException(status_code=404, detail="Live price data not available.")
-
-        latest_row = live_price.iloc[-1]
-        return {
-            "ticker": ticker,
-            "price": round(latest_row["Close"], 2),
-            "timestamp": str(latest_row.name)
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
+"""
