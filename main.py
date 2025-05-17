@@ -244,7 +244,6 @@ def get_model_accuracy(model: str = "xgb"):
         if model.lower() == "xgb":
             X = df[['SMA_10', 'SMA_50', 'RSI']]
             y = df['Close']
-
             preds = xgb_model.predict(X)
             mse = np.mean((preds - y) ** 2)
 
@@ -259,5 +258,3 @@ def get_model_accuracy(model: str = "xgb"):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
