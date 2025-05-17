@@ -97,3 +97,43 @@ def predict_lstm(ticker: str = "AAPL", sequence_length: int = 50):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------
+# PREDICT ALL Prediction
+# -------------------------
+
+@app.get("/predict-all")
+def predict_all(ticker: str = "AAPL", sequence_length: int = 50):
+    try:
+        # --- XGBoost prediction ---
+        df_xgb = yf.download(ticker, period="3mo", interval="1d")
+        df_xgb['SMA_10'] = sma_indicator(df_xgb['Close'].squeeze(), window=10)
+        df_xgb['SMA_50'] = sma_indicator(df_xgb['Close'].squeeze(), window=50)
+        df_xgb['RSI'] = rsi(df_xgb['Close'].squeeze(), window=14)
+        df_xgb.dropna(inplace=True)
+
+        xgb_features = df_xgb[['SMA_10', 'SMA_50', 'RSI']].values[-1].reshape(1, -1)
+        xgb_prediction = xgb_model.predict(xgb_features)[0]
+
+        # --- LSTM prediction ---
+        df_lstm = yf.download(ticker, period="6mo", interval="1d")
+        close_prices = df_lstm[['Close']].values
+        scaled = lstm_scaler.transform(close_prices)
+
+        if len(scaled) < sequence_length:
+            raise HTTPException(status_code=400, detail="Not enough data for LSTM prediction.")
+
+        X_lstm = scaled[-sequence_length:].reshape(1, sequence_length, 1)
+        predicted_scaled = lstm_model.predict(X_lstm)
+        lstm_prediction = lstm_scaler.inverse_transform(predicted_scaled)[0][0]
+
+        return {
+            "ticker": ticker,
+            "predictions": {
+                "XGBoost": float(xgb_prediction),
+                "LSTM": float(lstm_prediction)
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
