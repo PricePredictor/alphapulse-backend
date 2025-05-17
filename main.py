@@ -271,17 +271,14 @@ def top_movers():
         for ticker in tickers:
             df = yf.download(ticker, period="2d", interval="1d", progress=False)
 
-            # Defensive checks
-            if df is None or df.empty or 'Close' not in df.columns:
+            # ✅ SAFE CHECKS
+            if df is None or df.empty:
+                continue
+            if "Close" not in df.columns or df["Close"].isnull().sum() > 0 or len(df["Close"]) < 2:
                 continue
 
-            close_series = df['Close'].dropna()
-            if len(close_series) < 2:
-                continue
-
-            prev_close = close_series.iloc[-2]
-            latest_close = close_series.iloc[-1]
-
+            prev_close = df["Close"].iloc[-2]
+            latest_close = df["Close"].iloc[-1]
             change_pct = ((latest_close - prev_close) / prev_close) * 100
 
             movers.append({
