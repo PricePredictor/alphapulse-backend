@@ -4,7 +4,7 @@
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
+from sklearn.metrics import mean_squared_error
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -163,6 +163,65 @@ def get_history(ticker: str, period: str = "1mo", interval: str = "1d"):
             "period": period,
             "interval": interval,
             "history": history
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------
+# BackTest
+# -------------------------
+
+@app.get("/backtest")
+def backtest(ticker: str = "AAPL", model: str = "xgb", start: str = "2023-01-01", end: str = "2023-03-01"):
+    try:
+        df = yf.download(ticker, start=start, end=end, interval="1d")
+        df.dropna(inplace=True)
+
+        if model.lower() == "xgb":
+            df['SMA_10'] = sma_indicator(df['Close'].squeeze(), window=10)
+            df['SMA_50'] = sma_indicator(df['Close'].squeeze(), window=50)
+            df['RSI'] = rsi(df['Close'].squeeze(), window=14)
+            df.dropna(inplace=True)
+
+            predictions = []
+            actuals = []
+
+            for i in range(len(df)):
+                if i < 50:
+                    continue
+                row = df.iloc[i]
+                features = df[['SMA_10', 'SMA_50', 'RSI']].iloc[i].values.reshape(1, -1)
+                pred = xgb_model.predict(features)[0]
+                predictions.append(pred)
+                actuals.append(row['Close'])
+
+        elif model.lower() == "lstm":
+            close_prices = df[['Close']].values
+            scaled = lstm_scaler.transform(close_prices)
+
+            sequence_length = 50
+            predictions = []
+            actuals = []
+
+            for i in range(sequence_length, len(scaled)):
+                X = scaled[i-sequence_length:i].reshape(1, sequence_length, 1)
+                pred_scaled = lstm_model.predict(X)
+                pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
+                predictions.append(pred)
+                actuals.append(close_prices[i][0])
+
+        else:
+            raise HTTPException(status_code=400, detail="Model must be 'xgb' or 'lstm'")
+
+        mse = mean_squared_error(actuals, predictions)
+        return {
+            "ticker": ticker,
+            "model": model.upper(),
+            "start": start,
+            "end": end,
+            "mse": round(mse, 4),
+            "n_predictions": len(predictions)
         }
 
     except Exception as e:
