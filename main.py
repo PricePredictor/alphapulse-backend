@@ -145,15 +145,27 @@ def predict_all(ticker: str = "AAPL", sequence_length: int = 50):
 def get_history(ticker: str, period: str = "1mo", interval: str = "1d"):
     try:
         df = yf.download(ticker, period=period, interval=interval)
-        df.reset_index(inplace=True)
-        df['Date'] = df['Date'].astype(str)  # Convert Timestamp to string for JSON
+
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data returned from Yahoo Finance.")
+
+        if 'Date' not in df.columns:
+            df.reset_index(inplace=True)
+
+        if 'Date' not in df.columns:
+            raise HTTPException(status_code=500, detail="Date column missing in returned data.")
+
+        df['Date'] = df['Date'].astype(str)  # ensure JSON serializable
         history = df[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']].to_dict(orient="records")
+
         return {
             "ticker": ticker,
             "period": period,
             "interval": interval,
             "history": history
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
