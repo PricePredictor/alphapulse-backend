@@ -1,3 +1,9 @@
+# ======================
+# train_models.py
+# ======================
+# This script trains XGBoost, LSTM, Random Forest, and LightGBM models
+# and saves them to disk for production use.
+
 import yfinance as yf
 import numpy as np
 import pandas as pd
@@ -15,9 +21,10 @@ import lightgbm as lgb
 # ---------- Train XGBoost Model ----------
 def train_xgboost_model(ticker="AAPL"):
     df = yf.download(ticker, period="1y", interval="1d")
-    df['SMA_10'] = SMAIndicator(close=df['Close'], window=10).sma_indicator()
-    df['SMA_50'] = SMAIndicator(close=df['Close'], window=50).sma_indicator()
-    df['RSI'] = RSIIndicator(close=df['Close'], window=14).rsi()
+    close = df[['Close']].squeeze()  # Ensure 1D Series
+    df['SMA_10'] = SMAIndicator(close=close, window=10).sma_indicator()
+    df['SMA_50'] = SMAIndicator(close=close, window=50).sma_indicator()
+    df['RSI'] = RSIIndicator(close=close, window=14).rsi()
     df.dropna(inplace=True)
 
     X = df[['SMA_10', 'SMA_50', 'RSI']]
@@ -58,9 +65,10 @@ def train_lstm_model(ticker="AAPL", sequence_length=50):
 # ---------- Train Random Forest Model ----------
 def train_random_forest_model(ticker="AAPL"):
     df = yf.download(ticker, period="1y", interval="1d")
-    df['SMA_10'] = SMAIndicator(close=df['Close'], window=10).sma_indicator()
-    df['SMA_50'] = SMAIndicator(close=df['Close'], window=50).sma_indicator()
-    df['RSI'] = RSIIndicator(close=df['Close'], window=14).rsi()
+    close = df[['Close']].squeeze()  # Ensure 1D Series
+    df['SMA_10'] = SMAIndicator(close=close, window=10).sma_indicator()
+    df['SMA_50'] = SMAIndicator(close=close, window=50).sma_indicator()
+    df['RSI'] = RSIIndicator(close=close, window=14).rsi()
     df.dropna(inplace=True)
 
     X = df[['SMA_10', 'SMA_50', 'RSI']]
@@ -75,9 +83,10 @@ def train_random_forest_model(ticker="AAPL"):
 # ---------- Train LightGBM Model ----------
 def train_lightgbm_model(ticker="AAPL"):
     df = yf.download(ticker, period="1y", interval="1d")
-    df['SMA_10'] = SMAIndicator(close=df['Close'], window=10).sma_indicator()
-    df['SMA_50'] = SMAIndicator(close=df['Close'], window=50).sma_indicator()
-    df['RSI'] = RSIIndicator(close=df['Close'], window=14).rsi()
+    close = df[['Close']].squeeze()  # Ensure 1D Series
+    df['SMA_10'] = SMAIndicator(close=close, window=10).sma_indicator()
+    df['SMA_50'] = SMAIndicator(close=close, window=50).sma_indicator()
+    df['RSI'] = RSIIndicator(close=close, window=14).rsi()
     df.dropna(inplace=True)
 
     X = df[['SMA_10', 'SMA_50', 'RSI']]
