@@ -258,3 +258,37 @@ def get_model_accuracy(model: str = "xgb"):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------
+# Top Movers
+# -------------------------
+
+@app.get("/top-movers")
+def top_movers():
+    try:
+        tickers = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMZN", "META", "NFLX", "INTC", "AMD"]
+        movers = []
+
+        for ticker in tickers:
+            df = yf.download(ticker, period="2d", interval="1d")
+            if len(df) < 2:
+                continue
+            prev_close = df['Close'].iloc[-2]
+            latest_close = df['Close'].iloc[-1]
+            change_pct = ((latest_close - prev_close) / prev_close) * 100
+            movers.append({
+                "ticker": ticker,
+                "change_percent": round(change_pct, 2),
+                "price": round(latest_close, 2)
+            })
+
+        gainers = sorted([m for m in movers if m["change_percent"] > 0], key=lambda x: -x["change_percent"])[:5]
+        losers = sorted([m for m in movers if m["change_percent"] < 0], key=lambda x: x["change_percent"])[:5]
+
+        return {
+            "gainers": gainers,
+            "losers": losers
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
