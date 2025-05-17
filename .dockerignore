@@ -6,5 +6,7 @@ __pycache__/
 .git
 .gitignore
 *.db
+
+# 🚫 DO NOT exclude model files used in production
 *.h5
 *.pkl
