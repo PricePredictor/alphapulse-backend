@@ -228,3 +228,36 @@ def backtest(ticker: str = "AAPL", model: str = "xgb", start: str = "2023-01-01"
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# -------------------------
+# Accuracy
+# -------------------------
+@app.get("/accuracy")
+def get_model_accuracy(model: str = "xgb"):
+    try:
+        ticker = "AAPL"
+        df = yf.download(ticker, period="6mo", interval="1d")
+        df['SMA_10'] = sma_indicator(df['Close'].squeeze(), window=10)
+        df['SMA_50'] = sma_indicator(df['Close'].squeeze(), window=50)
+        df['RSI'] = rsi(df['Close'].squeeze(), window=14)
+        df.dropna(inplace=True)
+
+        if model.lower() == "xgb":
+            X = df[['SMA_10', 'SMA_50', 'RSI']]
+            y = df['Close']
+
+            preds = xgb_model.predict(X)
+            mse = np.mean((preds - y) ** 2)
+
+            return {
+                "model": "XGBoost",
+                "mse": round(mse, 2),
+                "n_test_samples": len(y)
+            }
+
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported model for accuracy endpoint.")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
