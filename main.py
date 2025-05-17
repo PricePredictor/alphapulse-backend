@@ -317,3 +317,26 @@ def top_movers():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------
+# Live Price
+# -------------------------
+@app.get("/live-price")
+def get_live_price(ticker: str = "AAPL"):
+    try:
+        ticker_data = yf.Ticker(ticker)
+        live_price = ticker_data.history(period="1d", interval="1m")  # most recent 1-minute data
+
+        if live_price.empty:
+            raise HTTPException(status_code=404, detail="Live price data not available.")
+
+        latest_row = live_price.iloc[-1]
+        return {
+            "ticker": ticker,
+            "price": round(latest_row["Close"], 2),
+            "timestamp": str(latest_row.name)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
