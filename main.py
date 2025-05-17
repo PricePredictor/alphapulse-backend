@@ -53,9 +53,9 @@ def health():
 def predict_xgb(ticker: str = "AAPL"):
     try:
         df = yf.download(ticker, period="3mo", interval="1d")
-        df['SMA_10'] = sma_indicator(df['Close'], window=10)
-        df['SMA_50'] = sma_indicator(df['Close'], window=50)
-        df['RSI'] = rsi(df['Close'], window=14)
+        df['SMA_10'] = sma_indicator(df['Close'].squeeze(), window=10)
+        df['SMA_50'] = sma_indicator(df['Close'].squeeze(), window=50)
+        df['RSI'] = rsi(df['Close'].squeeze(), window=14)
         df.dropna(inplace=True)
 
         features = df[['SMA_10', 'SMA_50', 'RSI']].values[-1].reshape(1, -1)
