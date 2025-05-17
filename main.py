@@ -262,7 +262,6 @@ def get_model_accuracy(model: str = "xgb"):
 # -------------------------
 # Top Movers
 # -------------------------
-
 @app.get("/top-movers")
 def top_movers():
     try:
@@ -271,11 +270,17 @@ def top_movers():
 
         for ticker in tickers:
             df = yf.download(ticker, period="2d", interval="1d")
-            if len(df) < 2:
+            if df is None or df.empty or df.shape[0] < 2:
                 continue
+
+            df.dropna(subset=["Close"], inplace=True)
+            if df.shape[0] < 2:
+                continue
+
             prev_close = df['Close'].iloc[-2]
             latest_close = df['Close'].iloc[-1]
             change_pct = ((latest_close - prev_close) / prev_close) * 100
+
             movers.append({
                 "ticker": ticker,
                 "change_percent": round(change_pct, 2),
