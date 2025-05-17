@@ -270,18 +270,17 @@ def top_movers():
 
         for ticker in tickers:
             df = yf.download(ticker, period="2d", interval="1d", progress=False)
-            
-            if df is None or df.empty or "Close" not in df.columns or df["Close"].isnull().any():
+
+            # Defensive checks
+            if df is None or df.empty or 'Close' not in df.columns:
                 continue
 
-            if df.shape[0] < 2:
+            close_series = df['Close'].dropna()
+            if len(close_series) < 2:
                 continue
 
-            prev_close = df['Close'].iloc[-2]
-            latest_close = df['Close'].iloc[-1]
-
-            if pd.isna(prev_close) or pd.isna(latest_close):
-                continue
+            prev_close = close_series.iloc[-2]
+            latest_close = close_series.iloc[-1]
 
             change_pct = ((latest_close - prev_close) / prev_close) * 100
 
@@ -301,4 +300,5 @@ def top_movers():
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
