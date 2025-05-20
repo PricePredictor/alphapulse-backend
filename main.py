@@ -80,3 +80,70 @@ def predict_price(ticker: str, model_type: str = "xgb"):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------
+# Backtest All Models
+# -------------------------
+@app.get("/backtest-multi")
+def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "2023-03-01"):
+    try:
+        df = yf.download(ticker, start=start, end=end, interval="1d")
+        df.dropna(inplace=True)
+
+        df['SMA_10'] = SMAIndicator(df['Close'], window=10).sma_indicator()
+        df['SMA_50'] = SMAIndicator(df['Close'], window=50).sma_indicator()
+        df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
+        df.dropna(inplace=True)
+
+        feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
+        y_true = df['Close'].values
+        results = {}
+
+        # XGBoost
+        preds_xgb = xgb_model.predict(feature_df)
+        results["XGBoost"] = {
+            "mse": round(mean_squared_error(y_true, preds_xgb), 4),
+            "n_predictions": len(preds_xgb)
+        }
+
+        # Random Forest
+        preds_rf = rf_model.predict(feature_df)
+        results["RandomForest"] = {
+            "mse": round(mean_squared_error(y_true, preds_rf), 4),
+            "n_predictions": len(preds_rf)
+        }
+
+        # LightGBM
+        preds_lgb = lgb_model.predict(feature_df)
+        results["LightGBM"] = {
+            "mse": round(mean_squared_error(y_true, preds_lgb), 4),
+            "n_predictions": len(preds_lgb)
+        }
+
+        # LSTM
+        scaled_close = lstm_scaler.transform(df[['Close']].values)
+        sequence_length = 50
+        preds_lstm = []
+        actual_lstm = []
+
+        for i in range(sequence_length, len(scaled_close)):
+            X_seq = scaled_close[i-sequence_length:i].reshape(1, sequence_length, 1)
+            pred_scaled = lstm_model.predict(X_seq)
+            pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
+            preds_lstm.append(pred)
+            actual_lstm.append(df['Close'].values[i])
+
+        results["LSTM"] = {
+            "mse": round(mean_squared_error(actual_lstm, preds_lstm), 4),
+            "n_predictions": len(preds_lstm)
+        }
+
+        return {
+            "ticker": ticker,
+            "start": start,
+            "end": end,
+            "results": results
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
