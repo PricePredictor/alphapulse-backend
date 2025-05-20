@@ -203,6 +203,9 @@ def predict_ensemble(ticker: str = "AAPL"):
 # -------------------------
 # Accuracy Multi-Model Endpoint
 # -------------------------
+# -------------------------
+# Accuracy Multi-Model Endpoint
+# -------------------------
 @app.get("/accuracy-multi")
 def accuracy_multi(ticker: str = "AAPL"):
     try:
@@ -216,7 +219,7 @@ def accuracy_multi(ticker: str = "AAPL"):
         df.dropna(inplace=True)
 
         feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
-        y_true = df['Close'].values
+        y_true = df['Close'].values.ravel()  # Flatten here
 
         results = {}
 
@@ -240,10 +243,10 @@ def accuracy_multi(ticker: str = "AAPL"):
 
         for i in range(sequence_length, len(scaled_close)):
             X_seq = scaled_close[i-sequence_length:i].reshape(1, sequence_length, 1)
-            pred_scaled = lstm_model.predict(X_seq)
+            pred_scaled = lstm_model.predict(X_seq, verbose=0)
             pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
             preds_lstm.append(pred)
-            actual_lstm.append(df['Close'].values[i])
+            actual_lstm.append(df['Close'].values[i].item())
 
         results["LSTM"] = round(mean_squared_error(
             np.array(actual_lstm).ravel(),
@@ -253,7 +256,7 @@ def accuracy_multi(ticker: str = "AAPL"):
         return {
             "ticker": ticker.upper(),
             "accuracy": results,
-            "n_samples": len(feature_df)
+            "n_samples": len(y_true)
         }
 
     except Exception as e:
