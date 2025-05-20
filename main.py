@@ -96,7 +96,7 @@ def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "
         df.dropna(inplace=True)
 
         feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
-        y_true = df['Close'].values
+        y_true = df['Close'].values.ravel()
         results = {}
 
         # XGBoost
@@ -128,13 +128,13 @@ def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "
 
         for i in range(sequence_length, len(scaled_close)):
             X_seq = scaled_close[i-sequence_length:i].reshape(1, sequence_length, 1)
-            pred_scaled = lstm_model.predict(X_seq)
+            pred_scaled = lstm_model.predict(X_seq, verbose=0)
             pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
             preds_lstm.append(pred)
-            actual_lstm.append(df['Close'].values[i])
+            actual_lstm.append(df['Close'].values[i].item())
 
         results["LSTM"] = {
-            "mse": round(mean_squared_error(actual_lstm, preds_lstm), 4),
+            "mse": round(mean_squared_error(np.array(actual_lstm), np.array(preds_lstm)), 4),
             "n_predictions": len(preds_lstm)
         }
 
