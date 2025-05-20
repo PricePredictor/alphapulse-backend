@@ -219,20 +219,20 @@ def accuracy_multi(ticker: str = "AAPL"):
         df.dropna(inplace=True)
 
         feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
-        y_true = df['Close'].values.ravel()  # ✅ Flatten the ground truth
+        y_true = df['Close'].values.reshape(-1)  # ✅ Force 1D array
 
         results = {}
 
         # XGBoost
-        preds_xgb = xgb_model.predict(feature_df)
+        preds_xgb = xgb_model.predict(feature_df).reshape(-1)  # ✅ Flatten
         results["XGBoost"] = round(mean_squared_error(y_true, preds_xgb), 4)
 
         # Random Forest
-        preds_rf = rf_model.predict(feature_df)
+        preds_rf = rf_model.predict(feature_df).reshape(-1)  # ✅ Flatten
         results["RandomForest"] = round(mean_squared_error(y_true, preds_rf), 4)
 
         # LightGBM
-        preds_lgb = lgb_model.predict(feature_df)
+        preds_lgb = lgb_model.predict(feature_df).reshape(-1)  # ✅ Flatten
         results["LightGBM"] = round(mean_squared_error(y_true, preds_lgb), 4)
 
         # LSTM
@@ -248,11 +248,10 @@ def accuracy_multi(ticker: str = "AAPL"):
             preds_lstm.append(pred)
             actual_lstm.append(df['Close'].values[i])
 
-        # ✅ Flatten both actual and predicted arrays
-        results["LSTM"] = round(mean_squared_error(
-            np.array(actual_lstm).ravel(),
-            np.array(preds_lstm).ravel()
-        ), 4)
+        preds_lstm = np.array(preds_lstm).reshape(-1)
+        actual_lstm = np.array(actual_lstm).reshape(-1)
+
+        results["LSTM"] = round(mean_squared_error(actual_lstm, preds_lstm), 4)
 
         return {
             "ticker": ticker.upper(),
