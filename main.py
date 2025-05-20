@@ -200,3 +200,59 @@ def predict_ensemble(ticker: str = "AAPL"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# -------------------------
+# Accuracy Multi-Model Endpoint
+# -------------------------
+@app.get("/accuracy-multi")
+def accuracy_multi(ticker: str = "AAPL"):
+    try:
+        df = yf.download(ticker, period="6mo", interval="1d")
+        if df.empty:
+            raise HTTPException(status_code=404, detail="No data available")
+
+        df['SMA_10'] = SMAIndicator(df['Close'], window=10).sma_indicator()
+        df['SMA_50'] = SMAIndicator(df['Close'], window=50).sma_indicator()
+        df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
+        df.dropna(inplace=True)
+
+        feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
+        y_true = df['Close'].values
+
+        results = {}
+
+        # XGBoost
+        preds_xgb = xgb_model.predict(feature_df)
+        results["XGBoost"] = round(mean_squared_error(y_true, preds_xgb), 4)
+
+        # Random Forest
+        preds_rf = rf_model.predict(feature_df)
+        results["RandomForest"] = round(mean_squared_error(y_true, preds_rf), 4)
+
+        # LightGBM
+        preds_lgb = lgb_model.predict(feature_df)
+        results["LightGBM"] = round(mean_squared_error(y_true, preds_lgb), 4)
+
+        # LSTM
+        scaled_close = lstm_scaler.transform(df[['Close']].values)
+        sequence_length = 50
+        preds_lstm = []
+        actual_lstm = []
+
+        for i in range(sequence_length, len(scaled_close)):
+            X_seq = scaled_close[i-sequence_length:i].reshape(1, sequence_length, 1)
+            pred_scaled = lstm_model.predict(X_seq)
+            pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
+            preds_lstm.append(pred)
+            actual_lstm.append(df['Close'].values[i])
+
+        results["LSTM"] = round(mean_squared_error(actual_lstm, preds_lstm), 4)
+
+        return {
+            "ticker": ticker.upper(),
+            "accuracy": results,
+            "n_samples": len(feature_df)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
