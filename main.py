@@ -1,7 +1,3 @@
-# ======================
-# main.py
-# ======================
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.metrics import mean_squared_error
@@ -17,10 +13,8 @@ from ta.momentum import RSIIndicator
 from sklearn.ensemble import RandomForestRegressor
 import lightgbm as lgb
 
-# Initialize FastAPI app
 app = FastAPI()
 
-# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,7 +23,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load models
 try:
     xgb_model: XGBRegressor = joblib.load("xgb_model.pkl")
     lstm_model = load_model("lstm_model.h5")
@@ -39,7 +32,9 @@ try:
 except Exception as e:
     raise RuntimeError(f"Model loading failed: {str(e)}")
 
-
+# -------------------------
+# /predict
+# -------------------------
 @app.get("/predict")
 def predict_price(ticker: str, model_type: str = "xgb"):
     try:
@@ -47,22 +42,22 @@ def predict_price(ticker: str, model_type: str = "xgb"):
         if df.empty:
             raise HTTPException(status_code=404, detail="Stock data not found")
 
-        close = df["Close"]
-        df["SMA_10"] = SMAIndicator(close=close, window=10).sma_indicator()
-        df["SMA_50"] = SMAIndicator(close=close, window=50).sma_indicator()
-        df["RSI"] = RSIIndicator(close=close, window=14).rsi()
+        df["SMA_10"] = SMAIndicator(df["Close"], window=10).sma_indicator()
+        df["SMA_50"] = SMAIndicator(df["Close"], window=50).sma_indicator()
+        df["RSI"] = RSIIndicator(df["Close"], window=14).rsi()
         df.dropna(inplace=True)
 
-        X = df[["SMA_10", "SMA_50", "RSI"]].copy()
-        X.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
-        last_row = X.iloc[-1:].values
+        features = df[["SMA_10", "SMA_50", "RSI"]].copy()
+        features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
+        features.columns = features.columns.str.strip()
+        last_row = features.iloc[-1:].values
 
         if model_type == "xgb":
-            prediction = xgb_model.predict(last_row).ravel()[0]
+            prediction = float(xgb_model.predict(last_row).reshape(-1)[0])
         elif model_type == "rf":
-            prediction = rf_model.predict(last_row).ravel()[0]
+            prediction = float(rf_model.predict(last_row).reshape(-1)[0])
         elif model_type == "lgb":
-            prediction = lgb_model.predict(last_row).ravel()[0]
+            prediction = float(lgb_model.predict(last_row).reshape(-1)[0])
         elif model_type == "lstm":
             scaled = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
             last_sequence = scaled[-50:].reshape(1, 50, 1)
@@ -80,6 +75,9 @@ def predict_price(ticker: str, model_type: str = "xgb"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# -------------------------
+# /backtest-multi
+# -------------------------
 @app.get("/backtest-multi")
 def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "2023-03-01"):
     try:
@@ -91,45 +89,36 @@ def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "
 
         features = df[["SMA_10", "SMA_50", "RSI"]].copy()
         features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
-        y_true = df["Close"].values.ravel()
+        features.columns = features.columns.str.strip()
+        y_true = df["Close"].values.reshape(-1)
+
         results = {}
 
-        preds_xgb = xgb_model.predict(features).ravel()
         results["XGBoost"] = {
-            "mse": round(mean_squared_error(y_true, preds_xgb), 4),
-            "n_predictions": len(preds_xgb)
+            "mse": round(mean_squared_error(y_true, xgb_model.predict(features).reshape(-1)), 4),
+            "n_predictions": len(y_true)
         }
 
-        preds_rf = rf_model.predict(features).ravel()
         results["RandomForest"] = {
-            "mse": round(mean_squared_error(y_true, preds_rf), 4),
-            "n_predictions": len(preds_rf)
+            "mse": round(mean_squared_error(y_true, rf_model.predict(features).reshape(-1)), 4),
+            "n_predictions": len(y_true)
         }
 
-        preds_lgb = lgb_model.predict(features).ravel()
         results["LightGBM"] = {
-            "mse": round(mean_squared_error(y_true, preds_lgb), 4),
-            "n_predictions": len(preds_lgb)
+            "mse": round(mean_squared_error(y_true, lgb_model.predict(features).reshape(-1)), 4),
+            "n_predictions": len(y_true)
         }
 
         # LSTM
-        scaled_close = lstm_scaler.transform(df[["Close"]].values)
-        sequence_length = 50
-        preds_lstm = []
-        actual_lstm = []
-
-        for i in range(sequence_length, len(scaled_close)):
-            X_seq = scaled_close[i-sequence_length:i].reshape(1, sequence_length, 1)
-            pred_scaled = lstm_model.predict(X_seq, verbose=0)
-            pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
+        scaled = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
+        preds_lstm, actual_lstm = [], []
+        for i in range(50, len(scaled)):
+            seq = scaled[i - 50:i].reshape(1, 50, 1)
+            pred = lstm_scaler.inverse_transform(lstm_model.predict(seq))[0][0]
             preds_lstm.append(pred)
             actual_lstm.append(df["Close"].values[i])
-
-        preds_lstm = np.array(preds_lstm).reshape(-1)
-        actual_lstm = np.array(actual_lstm).reshape(-1)
-
         results["LSTM"] = {
-            "mse": round(mean_squared_error(actual_lstm, preds_lstm), 4),
+            "mse": round(mean_squared_error(np.array(actual_lstm), np.array(preds_lstm)), 4),
             "n_predictions": len(preds_lstm)
         }
 
@@ -144,6 +133,9 @@ def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# -------------------------
+# /predict-ensemble
+# -------------------------
 @app.get("/predict-ensemble")
 def predict_ensemble(ticker: str = "AAPL"):
     try:
@@ -155,48 +147,38 @@ def predict_ensemble(ticker: str = "AAPL"):
 
         features = df[["SMA_10", "SMA_50", "RSI"]].copy()
         features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
+        features.columns = features.columns.str.strip()
         last_row = features.iloc[-1:].values
-        close_prices = df["Close"].values.ravel()
+        y_true = df["Close"].values.reshape(-1)
 
         predictions = {}
         mse_scores = {}
 
-        preds_xgb = xgb_model.predict(features).ravel()
-        mse_scores["XGBoost"] = mean_squared_error(close_prices[-len(preds_xgb):], preds_xgb)
-        predictions["XGBoost"] = float(xgb_model.predict(last_row)[0])
+        predictions["XGBoost"] = float(xgb_model.predict(last_row).reshape(-1)[0])
+        mse_scores["XGBoost"] = mean_squared_error(y_true, xgb_model.predict(features).reshape(-1))
 
-        preds_rf = rf_model.predict(features).ravel()
-        mse_scores["RandomForest"] = mean_squared_error(close_prices[-len(preds_rf):], preds_rf)
-        predictions["RandomForest"] = float(rf_model.predict(last_row)[0])
+        predictions["RandomForest"] = float(rf_model.predict(last_row).reshape(-1)[0])
+        mse_scores["RandomForest"] = mean_squared_error(y_true, rf_model.predict(features).reshape(-1))
 
-        preds_lgb = lgb_model.predict(features).ravel()
-        mse_scores["LightGBM"] = mean_squared_error(close_prices[-len(preds_lgb):], preds_lgb)
-        predictions["LightGBM"] = float(lgb_model.predict(last_row)[0])
+        predictions["LightGBM"] = float(lgb_model.predict(last_row).reshape(-1)[0])
+        mse_scores["LightGBM"] = mean_squared_error(y_true, lgb_model.predict(features).reshape(-1))
 
-        scaled_close = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
-        sequence_length = 50
-        X_lstm = []
-        y_lstm = []
+        scaled = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
+        preds_lstm, actual_lstm = [], []
+        for i in range(50, len(scaled)):
+            seq = scaled[i - 50:i].reshape(1, 50, 1)
+            pred = lstm_scaler.inverse_transform(lstm_model.predict(seq))[0][0]
+            preds_lstm.append(pred)
+            actual_lstm.append(df["Close"].values[i])
+        mse_scores["LSTM"] = mean_squared_error(np.array(actual_lstm), np.array(preds_lstm))
 
-        for i in range(sequence_length, len(scaled_close)):
-            X_lstm.append(scaled_close[i-sequence_length:i])
-            y_lstm.append(close_prices[i])
-
-        X_lstm = np.array(X_lstm).reshape(-1, sequence_length, 1)
-        y_lstm = np.array(y_lstm).reshape(-1)
-
-        preds_lstm_scaled = lstm_model.predict(X_lstm)
-        preds_lstm = lstm_scaler.inverse_transform(preds_lstm_scaled).ravel()
-        mse_scores["LSTM"] = mean_squared_error(y_lstm, preds_lstm)
-
-        last_seq = scaled_close[-sequence_length:].reshape(1, sequence_length, 1)
+        last_seq = scaled[-50:].reshape(1, 50, 1)
         predictions["LSTM"] = float(lstm_scaler.inverse_transform(lstm_model.predict(last_seq))[0][0])
 
         ensemble_avg = round(np.mean(list(predictions.values())), 2)
-
         inv_mses = {k: 1 / v for k, v in mse_scores.items()}
-        total_inv = sum(inv_mses.values())
-        weights = {k: inv_mses[k] / total_inv for k in inv_mses}
+        total = sum(inv_mses.values())
+        weights = {k: inv_mses[k] / total for k in inv_mses}
         ensemble_weighted = round(sum(predictions[k] * weights[k] for k in predictions), 2)
 
         return {
@@ -212,6 +194,9 @@ def predict_ensemble(ticker: str = "AAPL"):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# -------------------------
+# /accuracy-multi
+# -------------------------
 @app.get("/accuracy-multi")
 def accuracy_multi(ticker: str = "AAPL"):
     try:
@@ -223,34 +208,24 @@ def accuracy_multi(ticker: str = "AAPL"):
 
         features = df[["SMA_10", "SMA_50", "RSI"]].copy()
         features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
-        y_true = df["Close"].values.ravel()
-        results = {}
+        features.columns = features.columns.str.strip()
+        y_true = df["Close"].values.reshape(-1)
 
-        preds_xgb = xgb_model.predict(features).ravel()
-        results["XGBoost"] = round(mean_squared_error(y_true, preds_xgb), 4)
+        results = {
+            "XGBoost": round(mean_squared_error(y_true, xgb_model.predict(features).reshape(-1)), 4),
+            "RandomForest": round(mean_squared_error(y_true, rf_model.predict(features).reshape(-1)), 4),
+            "LightGBM": round(mean_squared_error(y_true, lgb_model.predict(features).reshape(-1)), 4)
+        }
 
-        preds_rf = rf_model.predict(features).ravel()
-        results["RandomForest"] = round(mean_squared_error(y_true, preds_rf), 4)
-
-        preds_lgb = lgb_model.predict(features).ravel()
-        results["LightGBM"] = round(mean_squared_error(y_true, preds_lgb), 4)
-
-        scaled_close = lstm_scaler.transform(df[["Close"]].values)
-        sequence_length = 50
-        preds_lstm = []
-        actual_lstm = []
-
-        for i in range(sequence_length, len(scaled_close)):
-            X_seq = scaled_close[i - sequence_length:i].reshape(1, sequence_length, 1)
-            pred_scaled = lstm_model.predict(X_seq, verbose=0)
-            pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
+        # LSTM
+        scaled = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
+        preds_lstm, actual_lstm = [], []
+        for i in range(50, len(scaled)):
+            seq = scaled[i - 50:i].reshape(1, 50, 1)
+            pred = lstm_scaler.inverse_transform(lstm_model.predict(seq))[0][0]
             preds_lstm.append(pred)
             actual_lstm.append(df["Close"].values[i])
-
-        preds_lstm = np.array(preds_lstm).ravel()
-        actual_lstm = np.array(actual_lstm).ravel()
-
-        results["LSTM"] = round(mean_squared_error(actual_lstm, preds_lstm), 4)
+        results["LSTM"] = round(mean_squared_error(np.array(actual_lstm), np.array(preds_lstm)), 4)
 
         return {
             "ticker": ticker.upper(),
