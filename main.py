@@ -219,7 +219,7 @@ def accuracy_multi(ticker: str = "AAPL"):
         df.dropna(inplace=True)
 
         feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
-        y_true = df['Close'].values.ravel()  # Flatten here
+        y_true = df['Close'].values.ravel()  # ✅ Flatten the ground truth
 
         results = {}
 
@@ -246,8 +246,9 @@ def accuracy_multi(ticker: str = "AAPL"):
             pred_scaled = lstm_model.predict(X_seq, verbose=0)
             pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
             preds_lstm.append(pred)
-            actual_lstm.append(df['Close'].values[i].item())
+            actual_lstm.append(df['Close'].values[i])
 
+        # ✅ Flatten both actual and predicted arrays
         results["LSTM"] = round(mean_squared_error(
             np.array(actual_lstm).ravel(),
             np.array(preds_lstm).ravel()
@@ -261,4 +262,3 @@ def accuracy_multi(ticker: str = "AAPL"):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
