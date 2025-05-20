@@ -167,34 +167,60 @@ def predict_ensemble(ticker: str = "AAPL"):
         features = df[['SMA_10', 'SMA_50', 'RSI']].copy()
         features.columns = ['SMA10', 'SMA50', 'RSI']
         last_row = features.iloc[-1:].values
+        close_prices = df['Close'].values
+
+        predictions = {}
+        mse_scores = {}
 
         # XGBoost
-        pred_xgb = float(xgb_model.predict(last_row)[0])
+        preds_xgb = xgb_model.predict(features)
+        mse_scores['XGBoost'] = mean_squared_error(close_prices[-len(preds_xgb):], preds_xgb)
+        predictions['XGBoost'] = float(xgb_model.predict(last_row)[0])
 
         # Random Forest
-        pred_rf = float(rf_model.predict(last_row)[0])
+        preds_rf = rf_model.predict(features)
+        mse_scores['RandomForest'] = mean_squared_error(close_prices[-len(preds_rf):], preds_rf)
+        predictions['RandomForest'] = float(rf_model.predict(last_row)[0])
 
         # LightGBM
-        pred_lgb = float(lgb_model.predict(last_row)[0])
+        preds_lgb = lgb_model.predict(features)
+        mse_scores['LightGBM'] = mean_squared_error(close_prices[-len(preds_lgb):], preds_lgb)
+        predictions['LightGBM'] = float(lgb_model.predict(last_row)[0])
 
         # LSTM
-        scaled = lstm_scaler.transform(df['Close'].values.reshape(-1, 1))
-        last_sequence = scaled[-50:].reshape(1, 50, 1)
-        pred_lstm = float(lstm_scaler.inverse_transform(lstm_model.predict(last_sequence))[0][0])
+        scaled_close = lstm_scaler.transform(df['Close'].values.reshape(-1, 1))
+        sequence_length = 50
+        X_lstm = []
+        y_lstm = []
+        for i in range(sequence_length, len(scaled_close)):
+            X_lstm.append(scaled_close[i-sequence_length:i])
+            y_lstm.append(close_prices[i])
+        X_lstm = np.array(X_lstm).reshape(-1, sequence_length, 1)
+        y_lstm = np.array(y_lstm)
 
-        # Ensemble: simple average
-        predictions = [pred_xgb, pred_rf, pred_lgb, pred_lstm]
-        ensemble_avg = round(np.mean(predictions), 2)
+        preds_lstm_scaled = lstm_model.predict(X_lstm)
+        preds_lstm = lstm_scaler.inverse_transform(preds_lstm_scaled).squeeze()
+        mse_scores['LSTM'] = mean_squared_error(y_lstm, preds_lstm)
+
+        last_seq = scaled_close[-sequence_length:].reshape(1, sequence_length, 1)
+        predictions['LSTM'] = float(lstm_scaler.inverse_transform(lstm_model.predict(last_seq))[0][0])
+
+        # Simple average
+        ensemble_avg = round(np.mean(list(predictions.values())), 2)
+
+        # Weighted average (inverse MSE)
+        inv_mses = {k: 1/v for k, v in mse_scores.items()}
+        total_inv = sum(inv_mses.values())
+        weights = {k: inv_mses[k]/total_inv for k in inv_mses}
+        ensemble_weighted = round(sum(predictions[k] * weights[k] for k in predictions), 2)
 
         return {
             "ticker": ticker.upper(),
-            "predictions": {
-                "XGBoost": round(pred_xgb, 2),
-                "RandomForest": round(pred_rf, 2),
-                "LightGBM": round(pred_lgb, 2),
-                "LSTM": round(pred_lstm, 2),
-                "EnsembleAvg": ensemble_avg
-            }
+            "predictions": {k: round(v, 2) for k, v in predictions.items()},
+            "weights": {k: round(weights[k], 4) for k in weights},
+            "mse_scores": {k: round(mse_scores[k], 4) for k in mse_scores},
+            "ensemble_avg": ensemble_avg,
+            "ensemble_weighted": ensemble_weighted
         }
 
     except Exception as e:
