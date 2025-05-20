@@ -39,9 +39,6 @@ try:
 except Exception as e:
     raise RuntimeError(f"Model loading failed: {str(e)}")
 
-# -------------------------
-# Unified Predict Endpoint
-# -------------------------
 @app.get("/predict")
 def predict_price(ticker: str, model_type: str = "xgb"):
     try:
@@ -56,7 +53,7 @@ def predict_price(ticker: str, model_type: str = "xgb"):
         df.dropna(inplace=True)
 
         X = df[['SMA_10', 'SMA_50', 'RSI']].copy()
-        X.columns = ['SMA10', 'SMA50', 'RSI']
+        X.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
         last_row = X.iloc[-1:].values
 
         if model_type == "xgb":
@@ -81,9 +78,6 @@ def predict_price(ticker: str, model_type: str = "xgb"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# -------------------------
-# Backtest All Models
-# -------------------------
 @app.get("/backtest-multi")
 def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "2023-03-01"):
     try:
@@ -95,32 +89,29 @@ def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "
         df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
         df.dropna(inplace=True)
 
-        feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
+        feature_df = df[['SMA_10', 'SMA_50', 'RSI']].copy()
+        feature_df.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
         y_true = df['Close'].values.ravel()
         results = {}
 
-        # XGBoost
         preds_xgb = xgb_model.predict(feature_df)
         results["XGBoost"] = {
             "mse": round(mean_squared_error(y_true, preds_xgb), 4),
             "n_predictions": len(preds_xgb)
         }
 
-        # Random Forest
         preds_rf = rf_model.predict(feature_df)
         results["RandomForest"] = {
             "mse": round(mean_squared_error(y_true, preds_rf), 4),
             "n_predictions": len(preds_rf)
         }
 
-        # LightGBM
         preds_lgb = lgb_model.predict(feature_df)
         results["LightGBM"] = {
             "mse": round(mean_squared_error(y_true, preds_lgb), 4),
             "n_predictions": len(preds_lgb)
         }
 
-        # LSTM
         scaled_close = lstm_scaler.transform(df[['Close']].values)
         sequence_length = 50
         preds_lstm = []
@@ -148,9 +139,6 @@ def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# -------------------------
-# Predict Ensemble (All Models)
-# -------------------------
 @app.get("/predict-ensemble")
 def predict_ensemble(ticker: str = "AAPL"):
     try:
@@ -165,29 +153,25 @@ def predict_ensemble(ticker: str = "AAPL"):
         df.dropna(inplace=True)
 
         features = df[['SMA_10', 'SMA_50', 'RSI']].copy()
-        features.columns = ['SMA10', 'SMA50', 'RSI']
+        features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
         last_row = features.iloc[-1:].values
         close_prices = df['Close'].values
 
         predictions = {}
         mse_scores = {}
 
-        # XGBoost
         preds_xgb = xgb_model.predict(features)
         mse_scores['XGBoost'] = mean_squared_error(close_prices[-len(preds_xgb):], preds_xgb)
         predictions['XGBoost'] = float(xgb_model.predict(last_row)[0])
 
-        # Random Forest
         preds_rf = rf_model.predict(features)
         mse_scores['RandomForest'] = mean_squared_error(close_prices[-len(preds_rf):], preds_rf)
         predictions['RandomForest'] = float(rf_model.predict(last_row)[0])
 
-        # LightGBM
         preds_lgb = lgb_model.predict(features)
         mse_scores['LightGBM'] = mean_squared_error(close_prices[-len(preds_lgb):], preds_lgb)
         predictions['LightGBM'] = float(lgb_model.predict(last_row)[0])
 
-        # LSTM
         scaled_close = lstm_scaler.transform(df['Close'].values.reshape(-1, 1))
         sequence_length = 50
         X_lstm = []
@@ -205,10 +189,7 @@ def predict_ensemble(ticker: str = "AAPL"):
         last_seq = scaled_close[-sequence_length:].reshape(1, sequence_length, 1)
         predictions['LSTM'] = float(lstm_scaler.inverse_transform(lstm_model.predict(last_seq))[0][0])
 
-        # Simple average
         ensemble_avg = round(np.mean(list(predictions.values())), 2)
-
-        # Weighted average (inverse MSE)
         inv_mses = {k: 1/v for k, v in mse_scores.items()}
         total_inv = sum(inv_mses.values())
         weights = {k: inv_mses[k]/total_inv for k in inv_mses}
@@ -226,12 +207,6 @@ def predict_ensemble(ticker: str = "AAPL"):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# -------------------------
-# Accuracy Multi-Model Endpoint
-# -------------------------
-# -------------------------
-# Accuracy Multi-Model Endpoint
-# -------------------------
 @app.get("/accuracy-multi")
 def accuracy_multi(ticker: str = "AAPL"):
     try:
@@ -244,24 +219,21 @@ def accuracy_multi(ticker: str = "AAPL"):
         df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
         df.dropna(inplace=True)
 
-        feature_df = df[['SMA_10', 'SMA_50', 'RSI']]
-        y_true = df['Close'].values.reshape(-1)  # ✅ Force 1D array
+        feature_df = df[['SMA_10', 'SMA_50', 'RSI']].copy()
+        feature_df.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
+        y_true = df['Close'].values.reshape(-1)
 
         results = {}
 
-        # XGBoost
-        preds_xgb = xgb_model.predict(feature_df).reshape(-1)  # ✅ Flatten
+        preds_xgb = xgb_model.predict(feature_df).reshape(-1)
         results["XGBoost"] = round(mean_squared_error(y_true, preds_xgb), 4)
 
-        # Random Forest
-        preds_rf = rf_model.predict(feature_df).reshape(-1)  # ✅ Flatten
+        preds_rf = rf_model.predict(feature_df).reshape(-1)
         results["RandomForest"] = round(mean_squared_error(y_true, preds_rf), 4)
 
-        # LightGBM
-        preds_lgb = lgb_model.predict(feature_df).reshape(-1)  # ✅ Flatten
+        preds_lgb = lgb_model.predict(feature_df).reshape(-1)
         results["LightGBM"] = round(mean_squared_error(y_true, preds_lgb), 4)
 
-        # LSTM
         scaled_close = lstm_scaler.transform(df[['Close']].values)
         sequence_length = 50
         preds_lstm = []
