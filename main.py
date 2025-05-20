@@ -245,7 +245,10 @@ def accuracy_multi(ticker: str = "AAPL"):
             preds_lstm.append(pred)
             actual_lstm.append(df['Close'].values[i])
 
-        results["LSTM"] = round(mean_squared_error(actual_lstm, preds_lstm), 4)
+        results["LSTM"] = round(mean_squared_error(
+            np.array(actual_lstm).ravel(),
+            np.array(preds_lstm).ravel()
+        ), 4)
 
         return {
             "ticker": ticker.upper(),
