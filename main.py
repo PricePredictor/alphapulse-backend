@@ -147,3 +147,56 @@ def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------
+# Predict Ensemble (All Models)
+# -------------------------
+@app.get("/predict-ensemble")
+def predict_ensemble(ticker: str = "AAPL"):
+    try:
+        df = yf.download(ticker, period="6mo", interval="1d")
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Stock data not found")
+
+        close = df[['Close']].squeeze()
+        df['SMA_10'] = SMAIndicator(close=close, window=10).sma_indicator()
+        df['SMA_50'] = SMAIndicator(close=close, window=50).sma_indicator()
+        df['RSI'] = RSIIndicator(close=close, window=14).rsi()
+        df.dropna(inplace=True)
+
+        features = df[['SMA_10', 'SMA_50', 'RSI']].copy()
+        features.columns = ['SMA10', 'SMA50', 'RSI']
+        last_row = features.iloc[-1:].values
+
+        # XGBoost
+        pred_xgb = float(xgb_model.predict(last_row)[0])
+
+        # Random Forest
+        pred_rf = float(rf_model.predict(last_row)[0])
+
+        # LightGBM
+        pred_lgb = float(lgb_model.predict(last_row)[0])
+
+        # LSTM
+        scaled = lstm_scaler.transform(df['Close'].values.reshape(-1, 1))
+        last_sequence = scaled[-50:].reshape(1, 50, 1)
+        pred_lstm = float(lstm_scaler.inverse_transform(lstm_model.predict(last_sequence))[0][0])
+
+        # Ensemble: simple average
+        predictions = [pred_xgb, pred_rf, pred_lgb, pred_lstm]
+        ensemble_avg = round(np.mean(predictions), 2)
+
+        return {
+            "ticker": ticker.upper(),
+            "predictions": {
+                "XGBoost": round(pred_xgb, 2),
+                "RandomForest": round(pred_rf, 2),
+                "LightGBM": round(pred_lgb, 2),
+                "LSTM": round(pred_lstm, 2),
+                "EnsembleAvg": ensemble_avg
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
