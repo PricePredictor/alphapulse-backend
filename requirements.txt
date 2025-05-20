@@ -3,10 +3,9 @@ uvicorn
 yfinance
 numpy
 pandas
-scikit-learn
-xgboost
 ta
-joblib
-matplotlib
-tensorflow
+xgboost
 lightgbm
+tensorflow
+scikit-learn
+joblib
