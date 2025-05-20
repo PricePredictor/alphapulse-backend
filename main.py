@@ -1,3 +1,7 @@
+# ======================
+# main.py
+# ======================
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sklearn.metrics import mean_squared_error
@@ -15,6 +19,7 @@ import lightgbm as lgb
 
 app = FastAPI()
 
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -33,6 +38,7 @@ try:
 except Exception as e:
     raise RuntimeError(f"Model loading failed: {str(e)}")
 
+
 @app.get("/predict")
 def predict_price(ticker: str, model_type: str = "xgb"):
     try:
@@ -40,23 +46,22 @@ def predict_price(ticker: str, model_type: str = "xgb"):
         if df.empty:
             raise HTTPException(status_code=404, detail="Stock data not found")
 
-        close = df['Close']
-        df['SMA_10'] = SMAIndicator(close=close, window=10).sma_indicator()
-        df['SMA_50'] = SMAIndicator(close=close, window=50).sma_indicator()
-        df['RSI'] = RSIIndicator(close=close, window=14).rsi()
+        close = df["Close"]
+        df["SMA_10"] = SMAIndicator(close=close, window=10).sma_indicator()
+        df["SMA_50"] = SMAIndicator(close=close, window=50).sma_indicator()
+        df["RSI"] = RSIIndicator(close=close, window=14).rsi()
         df.dropna(inplace=True)
 
-        features = df[['SMA_10', 'SMA_50', 'RSI']].copy()
-        features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
-        features.columns = features.columns.str.strip()
+        features = df[["SMA_10", "SMA_50", "RSI"]].copy()
+        features.columns = ["SMA10", "SMA50", "RSI"]
         last_row = features.iloc[-1:].values
 
         if model_type == "xgb":
-            prediction = xgb_model.predict(last_row)[0]
+            prediction = xgb_model.predict(last_row.reshape(1, -1)).ravel()[0]
         elif model_type == "rf":
-            prediction = rf_model.predict(last_row)[0]
+            prediction = rf_model.predict(last_row.reshape(1, -1)).ravel()[0]
         elif model_type == "lgb":
-            prediction = lgb_model.predict(last_row)[0]
+            prediction = lgb_model.predict(last_row.reshape(1, -1)).ravel()[0]
         elif model_type == "lstm":
             scaled = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
             last_sequence = scaled[-50:].reshape(1, 50, 1)
@@ -67,75 +72,75 @@ def predict_price(ticker: str, model_type: str = "xgb"):
         return {
             "ticker": ticker.upper(),
             "model": model_type.upper(),
-            "predicted_price": round(float(prediction), 2)
+            "predicted_price": round(float(prediction), 2),
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/backtest-multi")
 def backtest_multi(ticker: str = "AAPL", start: str = "2023-01-01", end: str = "2023-03-01"):
     try:
         df = yf.download(ticker, start=start, end=end, interval="1d")
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Data not found")
+
+        df["SMA_10"] = SMAIndicator(df["Close"], window=10).sma_indicator()
+        df["SMA_50"] = SMAIndicator(df["Close"], window=50).sma_indicator()
+        df["RSI"] = RSIIndicator(df["Close"], window=14).rsi()
         df.dropna(inplace=True)
 
-        df['SMA_10'] = SMAIndicator(df['Close'], window=10).sma_indicator()
-        df['SMA_50'] = SMAIndicator(df['Close'], window=50).sma_indicator()
-        df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
-        df.dropna(inplace=True)
-
-        features = df[['SMA_10', 'SMA_50', 'RSI']].copy()
-        features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
-        features.columns = features.columns.str.strip()
-        y_true = df['Close'].values.ravel()
+        feature_df = df[["SMA_10", "SMA_50", "RSI"]].copy()
+        feature_df.columns = ["SMA10", "SMA50", "RSI"]
+        y_true = df["Close"].values.ravel()
         results = {}
 
-        preds_xgb = xgb_model.predict(features).ravel()
+        preds_xgb = xgb_model.predict(feature_df).ravel()
         results["XGBoost"] = {
             "mse": round(mean_squared_error(y_true, preds_xgb), 4),
-            "n_predictions": len(preds_xgb)
+            "n_predictions": len(preds_xgb),
         }
 
-        preds_rf = rf_model.predict(features).ravel()
+        preds_rf = rf_model.predict(feature_df).ravel()
         results["RandomForest"] = {
             "mse": round(mean_squared_error(y_true, preds_rf), 4),
-            "n_predictions": len(preds_rf)
+            "n_predictions": len(preds_rf),
         }
 
-        preds_lgb = lgb_model.predict(features).ravel()
+        preds_lgb = lgb_model.predict(feature_df).ravel()
         results["LightGBM"] = {
             "mse": round(mean_squared_error(y_true, preds_lgb), 4),
-            "n_predictions": len(preds_lgb)
+            "n_predictions": len(preds_lgb),
         }
 
-        scaled_close = lstm_scaler.transform(df[['Close']].values)
+        # LSTM
+        scaled_close = lstm_scaler.transform(df[["Close"]].values)
         sequence_length = 50
-        preds_lstm = []
-        actual_lstm = []
+        preds_lstm, actual_lstm = [], []
 
         for i in range(sequence_length, len(scaled_close)):
-            X_seq = scaled_close[i-sequence_length:i].reshape(1, sequence_length, 1)
+            X_seq = scaled_close[i - sequence_length:i].reshape(1, sequence_length, 1)
             pred_scaled = lstm_model.predict(X_seq, verbose=0)
             pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
             preds_lstm.append(pred)
-            actual_lstm.append(df['Close'].values[i])
+            actual_lstm.append(df["Close"].values[i])
 
-        preds_lstm = np.array(preds_lstm).ravel()
-        actual_lstm = np.array(actual_lstm).ravel()
         results["LSTM"] = {
-            "mse": round(mean_squared_error(actual_lstm, preds_lstm), 4),
-            "n_predictions": len(preds_lstm)
+            "mse": round(mean_squared_error(np.array(actual_lstm), np.array(preds_lstm)), 4),
+            "n_predictions": len(preds_lstm),
         }
 
         return {
-            "ticker": ticker,
+            "ticker": ticker.upper(),
             "start": start,
             "end": end,
-            "results": results
+            "results": results,
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/predict-ensemble")
 def predict_ensemble(ticker: str = "AAPL"):
@@ -144,51 +149,54 @@ def predict_ensemble(ticker: str = "AAPL"):
         if df.empty:
             raise HTTPException(status_code=404, detail="Stock data not found")
 
-        df['SMA_10'] = SMAIndicator(df['Close'], window=10).sma_indicator()
-        df['SMA_50'] = SMAIndicator(df['Close'], window=50).sma_indicator()
-        df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
+        df["SMA_10"] = SMAIndicator(df["Close"], window=10).sma_indicator()
+        df["SMA_50"] = SMAIndicator(df["Close"], window=50).sma_indicator()
+        df["RSI"] = RSIIndicator(df["Close"], window=14).rsi()
         df.dropna(inplace=True)
 
-        features = df[['SMA_10', 'SMA_50', 'RSI']].copy()
-        features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
-        features.columns = features.columns.str.strip()
+        features = df[["SMA_10", "SMA_50", "RSI"]].copy()
+        features.columns = ["SMA10", "SMA50", "RSI"]
         last_row = features.iloc[-1:].values
-        y_true = df['Close'].values.ravel()
+        close_prices = df["Close"].values.ravel()
 
         predictions = {}
         mse_scores = {}
 
         preds_xgb = xgb_model.predict(features).ravel()
-        predictions['XGBoost'] = float(xgb_model.predict(last_row)[0])
-        mse_scores['XGBoost'] = mean_squared_error(y_true[-len(preds_xgb):], preds_xgb)
+        mse_scores["XGBoost"] = mean_squared_error(close_prices[-len(preds_xgb):], preds_xgb)
+        predictions["XGBoost"] = xgb_model.predict(last_row.reshape(1, -1)).ravel()[0]
 
         preds_rf = rf_model.predict(features).ravel()
-        predictions['RandomForest'] = float(rf_model.predict(last_row)[0])
-        mse_scores['RandomForest'] = mean_squared_error(y_true[-len(preds_rf):], preds_rf)
+        mse_scores["RandomForest"] = mean_squared_error(close_prices[-len(preds_rf):], preds_rf)
+        predictions["RandomForest"] = rf_model.predict(last_row.reshape(1, -1)).ravel()[0]
 
         preds_lgb = lgb_model.predict(features).ravel()
-        predictions['LightGBM'] = float(lgb_model.predict(last_row)[0])
-        mse_scores['LightGBM'] = mean_squared_error(y_true[-len(preds_lgb):], preds_lgb)
+        mse_scores["LightGBM"] = mean_squared_error(close_prices[-len(preds_lgb):], preds_lgb)
+        predictions["LightGBM"] = lgb_model.predict(last_row.reshape(1, -1)).ravel()[0]
 
-        scaled_close = lstm_scaler.transform(df['Close'].values.reshape(-1, 1))
+        # LSTM
+        scaled_close = lstm_scaler.transform(df["Close"].values.reshape(-1, 1))
         sequence_length = 50
-        X_lstm, y_lstm = [], []
+        X_lstm = []
+        y_lstm = []
 
         for i in range(sequence_length, len(scaled_close)):
-            X_lstm.append(scaled_close[i-sequence_length:i])
-            y_lstm.append(df['Close'].values[i])
+            X_lstm.append(scaled_close[i - sequence_length:i])
+            y_lstm.append(close_prices[i])
+
         X_lstm = np.array(X_lstm).reshape(-1, sequence_length, 1)
-        y_lstm = np.array(y_lstm).ravel()
+        y_lstm = np.array(y_lstm)
 
-        preds_lstm = lstm_model.predict(X_lstm)
-        preds_lstm = lstm_scaler.inverse_transform(preds_lstm).ravel()
-        predictions['LSTM'] = float(
-            lstm_scaler.inverse_transform(lstm_model.predict(scaled_close[-sequence_length:].reshape(1, sequence_length, 1)))[0][0]
-        )
-        mse_scores['LSTM'] = mean_squared_error(y_lstm, preds_lstm)
+        preds_lstm_scaled = lstm_model.predict(X_lstm)
+        preds_lstm = lstm_scaler.inverse_transform(preds_lstm_scaled).ravel()
+        mse_scores["LSTM"] = mean_squared_error(y_lstm, preds_lstm)
 
+        last_seq = scaled_close[-sequence_length:].reshape(1, sequence_length, 1)
+        predictions["LSTM"] = float(lstm_scaler.inverse_transform(lstm_model.predict(last_seq))[0][0])
+
+        # Ensembling
         ensemble_avg = round(np.mean(list(predictions.values())), 2)
-        inv_mses = {k: 1/v for k, v in mse_scores.items()}
+        inv_mses = {k: 1 / v for k, v in mse_scores.items()}
         total_inv = sum(inv_mses.values())
         weights = {k: inv_mses[k] / total_inv for k in inv_mses}
         ensemble_weighted = round(sum(predictions[k] * weights[k] for k in predictions), 2)
@@ -199,11 +207,12 @@ def predict_ensemble(ticker: str = "AAPL"):
             "weights": {k: round(weights[k], 4) for k in weights},
             "mse_scores": {k: round(mse_scores[k], 4) for k in mse_scores},
             "ensemble_avg": ensemble_avg,
-            "ensemble_weighted": ensemble_weighted
+            "ensemble_weighted": ensemble_weighted,
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/accuracy-multi")
 def accuracy_multi(ticker: str = "AAPL"):
@@ -212,46 +221,39 @@ def accuracy_multi(ticker: str = "AAPL"):
         if df.empty:
             raise HTTPException(status_code=404, detail="No data available")
 
-        df['SMA_10'] = SMAIndicator(df['Close'], window=10).sma_indicator()
-        df['SMA_50'] = SMAIndicator(df['Close'], window=50).sma_indicator()
-        df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
+        df["SMA_10"] = SMAIndicator(df["Close"], window=10).sma_indicator()
+        df["SMA_50"] = SMAIndicator(df["Close"], window=50).sma_indicator()
+        df["RSI"] = RSIIndicator(df["Close"], window=14).rsi()
         df.dropna(inplace=True)
 
-        features = df[['SMA_10', 'SMA_50', 'RSI']].copy()
-        features.rename(columns={"SMA_10": "SMA10", "SMA_50": "SMA50"}, inplace=True)
-        features.columns = features.columns.str.strip()
-        y_true = df['Close'].values.ravel()
+        feature_df = df[["SMA_10", "SMA_50", "RSI"]].copy()
+        feature_df.columns = ["SMA10", "SMA50", "RSI"]
+        y_true = df["Close"].values.ravel()
+
         results = {}
 
-        preds_xgb = xgb_model.predict(features).ravel()
-        results["XGBoost"] = round(mean_squared_error(y_true, preds_xgb), 4)
+        results["XGBoost"] = round(mean_squared_error(y_true, xgb_model.predict(feature_df).ravel()), 4)
+        results["RandomForest"] = round(mean_squared_error(y_true, rf_model.predict(feature_df).ravel()), 4)
+        results["LightGBM"] = round(mean_squared_error(y_true, lgb_model.predict(feature_df).ravel()), 4)
 
-        preds_rf = rf_model.predict(features).ravel()
-        results["RandomForest"] = round(mean_squared_error(y_true, preds_rf), 4)
-
-        preds_lgb = lgb_model.predict(features).ravel()
-        results["LightGBM"] = round(mean_squared_error(y_true, preds_lgb), 4)
-
-        scaled_close = lstm_scaler.transform(df[['Close']].values)
+        # LSTM
+        scaled_close = lstm_scaler.transform(df[["Close"]].values)
         sequence_length = 50
-        preds_lstm = []
-        actual_lstm = []
+        preds_lstm, actual_lstm = [], []
 
         for i in range(sequence_length, len(scaled_close)):
-            X_seq = scaled_close[i-sequence_length:i].reshape(1, sequence_length, 1)
+            X_seq = scaled_close[i - sequence_length:i].reshape(1, sequence_length, 1)
             pred_scaled = lstm_model.predict(X_seq, verbose=0)
             pred = lstm_scaler.inverse_transform(pred_scaled)[0][0]
             preds_lstm.append(pred)
-            actual_lstm.append(df['Close'].values[i])
+            actual_lstm.append(df["Close"].values[i])
 
-        preds_lstm = np.array(preds_lstm).ravel()
-        actual_lstm = np.array(actual_lstm).ravel()
-        results["LSTM"] = round(mean_squared_error(actual_lstm, preds_lstm), 4)
+        results["LSTM"] = round(mean_squared_error(np.array(actual_lstm), np.array(preds_lstm)), 4)
 
         return {
             "ticker": ticker.upper(),
             "accuracy": results,
-            "n_samples": len(y_true)
+            "n_samples": len(y_true),
         }
 
     except Exception as e:
