@@ -1,1 +1,13 @@
+version: "3.9"
+
+services:
+  backend:
+    build: .
+    container_name: alphapulse-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
 
