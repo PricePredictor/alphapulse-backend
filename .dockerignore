@@ -2,11 +2,12 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.env
-.git
-.gitignore
 *.db
+.env
+.git/
+.gitignore
+.dockerignore
 
-# 🚫 DO NOT exclude model files used in production
-*.h5
-*.pkl
+# ✅ Allow model files
+!*.h5
+!*.pkl
