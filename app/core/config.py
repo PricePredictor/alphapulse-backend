@@ -1,11 +1,14 @@
-from dotenv import load_dotenv
-import os
+from pydantic import BaseSettings
 
-load_dotenv()  # Load values from .env
+class Settings(BaseSettings):
+    PROJECT_NAME: str = "AlphaPulse AI"
+    
+    # Logging
+    LOG_LEVEL: str = "INFO"
+    LOG_ROTATION: str = "1 MB"
+    LOG_RETENTION: str = "7 days"
 
-class Settings:
-    PROJECT_NAME: str = os.getenv("PROJECT_NAME", "AlphaPulse")
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    API_VERSION: str = os.getenv("API_VERSION", "v1")
+    class Config:
+        env_file = ".env"
 
 settings = Settings()
