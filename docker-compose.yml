@@ -5,6 +5,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./app:/app  # Mount the app subfolder directly
+      - ./app:/app  # Mount the app subfolder correctly
     env_file:
       - .env
