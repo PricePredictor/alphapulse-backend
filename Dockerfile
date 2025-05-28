@@ -9,7 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-ENV PYTHONPATH=/
+ENV PYTHONPATH=/code
 
 EXPOSE 8000
 
