@@ -23,3 +23,8 @@ app.add_middleware(
 
 # Include your router
 app.include_router(prediction.router)  # ✅ updated from fastAPI_endpoint
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000)
