@@ -4,7 +4,5 @@ services:
     container_name: alphapulse-backend
     ports:
       - "8000:8000"
-    # volumes:  # ⛔ Comment this out
-    #   - ./app:/app
     env_file:
       - .env
