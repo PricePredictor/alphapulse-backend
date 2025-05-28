@@ -5,6 +5,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - .:/app
+      - .:/app        # ✅ mount whole project folder, not just ./app
     env_file:
       - .env
