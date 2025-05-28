@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 from app.core.logger import logger
 from app.core.config import settings
-from app.routers import fastAPI_endpoint  # Update this line based on your actual router filename
+from app.routers import prediction  # ✅ updated from fastAPI_endpoint
 
 # Load environment variables
 load_dotenv()
@@ -22,4 +22,4 @@ app.add_middleware(
 )
 
 # Include your router
-app.include_router(fastAPI_endpoint.router)
+app.include_router(prediction.router)  # ✅ updated from fastAPI_endpoint
