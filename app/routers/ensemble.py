@@ -1,5 +1,3 @@
-# app/routers/ensemble.py
-
 from fastapi import APIRouter, HTTPException, Query
 import traceback
 
