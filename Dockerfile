@@ -1,24 +1,25 @@
-# Use a lightweight official Python image
 FROM python:3.11-slim
 
-# Set working directory inside container
+# Set working directory
 WORKDIR /code
 
-# Install system dependencies
+# Install system-level dependencies
 RUN apt-get update && apt-get install -y libgomp1 && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Copy dependency files
 COPY requirements.txt .
+
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire project
+# Copy application code
 COPY . .
 
-# Set PYTHONPATH so that app.* imports work correctly
-ENV PYTHONPATH=/code
+# Make sure Python can find "app.main"
+ENV PYTHONPATH=/code/app
 
-# Expose the FastAPI port
+# Expose FastAPI default port
 EXPOSE 8000
 
-# Run FastAPI app using python module so PYTHONPATH is respected
-CMD ["python", "-m", "app.main"]
+# Run the FastAPI app
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
