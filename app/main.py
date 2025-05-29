@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 from app.core.logger import logger
 from app.core.config import settings
-from app.routers import predict, ensemble
+from app.routers import predict, ensemble  # ✅ Include ensemble router
 
 # Load environment variables
 load_dotenv()
@@ -25,17 +25,9 @@ app.add_middleware(
 
 # Register API routers
 app.include_router(predict.router)
-app.include_router(ensemble.router)
-
+app.include_router(ensemble.router)  # ✅ Mount ensemble endpoint
 
 # For local dev testing only
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000)
-
-# Predict Enesamble
-from fastapi import FastAPI, HTTPException, Query
-from typing import Dict
-import traceback
-
-app = FastAPI()
