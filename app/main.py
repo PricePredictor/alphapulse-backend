@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 from app.core.logger import logger
 from app.core.config import settings
 from app.routers import prediction  # ✅ updated from fastAPI_endpoint
+from app.routers import predict
+
+app.include_router(predict.router)
 
 # Load environment variables
 load_dotenv()
