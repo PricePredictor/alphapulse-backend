@@ -13,10 +13,10 @@ xgb_data = pd.DataFrame({
 
 # LSTM and Linear input
 lstm_data = pd.DataFrame({
-    "Close": np.linspace(100, 110, 50),
-    "Volume": np.random.randint(1000000, 5000000, 50),
-    "SMA_5": np.linspace(100, 109, 50),
-    "RSI": np.random.uniform(30, 70, 50),
+    "Close": np.linspace(100, 110, 10),
+    "Volume": np.random.randint(1000000, 5000000, 10),
+    "SMA_5": np.linspace(100, 109, 10),
+    "RSI": np.random.uniform(30, 70, 10),
 })
 
 print("=== Testing XGBoost ===")
