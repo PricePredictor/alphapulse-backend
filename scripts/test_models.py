@@ -20,13 +20,16 @@ lstm_data = pd.DataFrame({
 })
 
 print("=== Testing XGBoost ===")
+print("[Step 2] Calling XGBoost model")
 print(xgb_predict("AAPL", xgb_data))
 
 print("=== Testing LSTM ===")
+print("[Step 2] Calling LSTM model")
 try:
     print(lstm_predict("AAPL", lstm_data))
 except Exception as e:
     print("LSTM failed:", e)
 
 print("=== Testing Linear Model ===")
+print("[Step 2] Calling Linear model")
 print(linear_predict("AAPL", lstm_data))
