@@ -15,7 +15,7 @@ def get_daily_pct_change(ticker_list):
     return data
 
 from fastapi import APIRouter
-from scripts.top_movers import get_daily_pct_change, TICKERS
+from top_movers import get_daily_pct_change, TICKERS
 
 router = APIRouter()
 
