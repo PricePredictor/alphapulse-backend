@@ -4,8 +4,7 @@ from dotenv import load_dotenv
 
 from app.core.logger import logger
 from app.core.config import settings
-from app.routers import predict, ensemble  # ✅ Include ensemble router
-from app.routes import top_movers
+from app.routers import predict, ensemble,top_movers  # ✅ Include ensemble router
 
 app.include_router(top_movers.router)
 
