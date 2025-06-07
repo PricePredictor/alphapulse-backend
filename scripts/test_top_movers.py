@@ -1,6 +1,6 @@
 # scripts/test_top_movers.py
 
-from scripts.top_movers import get_daily_pct_change, TICKERS
+from top_movers import get_daily_pct_change, TICKERS
 import json
 
 result = get_daily_pct_change(TICKERS)
