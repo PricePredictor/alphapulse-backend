@@ -1,0 +1,93 @@
+Excellent — now that your repo is cleaned and synced, here's a full **cheat sheet of Git commands** used in this sprint (with comments for each):
+
+---
+
+### ✅ **General Git Workflow**
+
+```bash
+# Check repo status (modified, staged, etc.)
+git status
+
+# Add all modified files to staging
+git add .
+
+# Add a specific file to staging
+git add <filename>
+
+# Commit staged changes with a message
+git commit -m "Your commit message here"
+
+# Push committed changes to remote repo
+git push origin main
+
+# Pull latest changes from remote main
+git pull origin main
+```
+
+---
+
+### 🚫 **Accidental File Committed (e.g., private key)**
+
+```bash
+# Remove tracked file from git (but keep locally)
+git rm --cached alphapulse_pair.pem
+
+# Add the filename to .gitignore
+echo "alphapulse_pair.pem" >> .gitignore
+
+# Commit the .gitignore update
+git commit -m "Removed accidentally committed private key and updated .gitignore"
+```
+
+---
+
+### 🚨 **Fix GitHub Secret Protection / History Rewrite**
+
+```bash
+# Install (one time only)
+pip install git-filter-repo
+
+# Remove all traces of sensitive file from history
+git filter-repo --path alphapulse_pair.pem --invert-paths --force
+
+# Re-add origin after filter-repo wipes it
+git remote add origin https://github.com/PricePredictor/alphapulse-backend.git
+
+# Force push rewritten history
+git push origin main --force
+```
+
+---
+
+### 📁 **Docs Folder Work (Markdown Ticket Files)**
+
+```bash
+# Add a specific .md ticket file from docs/
+git add docs/ticket_21_regression_tests_all_endpoints_20250609.md
+
+# Commit ticket doc
+git commit -m "Ticket #21: Added regression test summary for all endpoints"
+
+# Push to GitHub
+git push origin main
+```
+
+---
+
+### 🧹 **Undo / Reset (optional helpers)**
+
+```bash
+# Unstage a file (if added by mistake)
+git restore --staged <filename>
+
+# Undo last commit (soft reset, keeps changes)
+git reset --soft HEAD~1
+
+# Discard uncommitted file changes
+git checkout -- <filename>
+```
+
+---
+
+Let me know if you want this saved as a `.md` file for your `/docs` folder.
+Otherwise, we’re ready to start your **next ticket for Sprint 2**.
